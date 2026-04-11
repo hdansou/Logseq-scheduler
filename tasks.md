@@ -67,6 +67,7 @@ Spec and task breakdown live in `tasks/todo.md`; reference mockup at
 - [x] Detail pane edit mode (reuses the create form pre-filled; replaces entry in place preserving `id` and `createdAt`)
 - [x] Empty state ("No schedules yet" + ⏰ icon) and auto-select-first on panel open
 - [x] Responsive breakpoint at 680px: panes stack, back button appears on detail, third stat hides
+- [x] Escape key closes the panel; when in create/edit mode Esc first cancels the form back to view mode (two-step), matching the Cancel button semantics
 - [x] Dark mode now follows Logseq's theme via `logseq.App.getUserConfigs` + `logseq.App.onThemeModeChanged` (was `prefers-color-scheme` which doesn't fire for Logseq's CSS-class-based dark mode)
 - [x] Vitest unit-test suite for pure helpers — `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`, `formatPast` (33 tests)
 - [x] Storage now holds an in-memory authoritative cache so reads after writes return fresh data (fixes the stale-rerender bug where `logseq.updateSettings` is fire-and-forget IPC)

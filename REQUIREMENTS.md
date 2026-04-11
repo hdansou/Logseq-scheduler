@@ -54,7 +54,7 @@ live in `tasks/todo.md`; reference mockup at `mockups/variant-d-refined.html`.
 - [x] **Auto-select first schedule** on panel open; centered empty-state placeholder when no schedules exist
 - [x] **Responsive layout at 680px** — panes stack, "← Schedules" back button appears on detail, third header stat hides
 - [x] **Follows Logseq's theme** — reads `logseq.App.getUserConfigs` on load and subscribes to `logseq.App.onThemeModeChanged`; CSS uses `html.dark` selectors instead of `prefers-color-scheme`
-- [x] **Keyboard accessibility** — sidebar items are real `<button>` elements with `aria-pressed` and focus-visible outline; search input has `aria-label`
+- [x] **Keyboard accessibility** — sidebar items are real `<button>` elements with `aria-pressed` and focus-visible outline; search input has `aria-label`; Esc closes the panel (two-step in create/edit mode: first Esc cancels the form, second closes)
 - [x] **Unit tests** — Vitest suite for the pure helpers in `src/schedule-helpers.ts` (33 tests)
 
 ## Technical Approach
@@ -86,4 +86,4 @@ live in `tasks/todo.md`; reference mockup at `mockups/variant-d-refined.html`.
 - Notifications when a schedule fires
 - Drag-to-reorder schedules
 - Bulk actions on multiple schedules
-- Keyboard shortcuts inside the panel (e.g. Esc to cancel)
+- Additional keyboard shortcuts beyond Esc-to-close (e.g. `n` for new schedule, `/` to focus search, arrow keys to navigate the list)

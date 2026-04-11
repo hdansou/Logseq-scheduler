@@ -28,6 +28,7 @@ let cachedSchedules: ScheduleEntry[] = [];
 let cachedFireLog: FireLogEntry[] = [];
 let callbacks: PanelCallbacks | null = null;
 let needsInitialSeed = true;
+let escListenerAttached = false;
 
 /**
  * Entry point invoked when the user opens the panel via toolbar or command
@@ -36,7 +37,32 @@ let needsInitialSeed = true;
 export async function renderPanel(cb: PanelCallbacks): Promise<void> {
   callbacks = cb;
   needsInitialSeed = true;
+  attachEscListener();
   await rerender();
+}
+
+/**
+ * Escape key behaviour:
+ *   - When in create/edit mode, Esc cancels the form back to view mode
+ *     (same effect as clicking Cancel).
+ *   - Otherwise Esc closes the panel.
+ * Attached once to the iframe's document and persists across re-renders,
+ * so we don't stack duplicate listeners on every rerender.
+ */
+function attachEscListener(): void {
+  if (escListenerAttached) return;
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.isComposing) return;
+    if (paneMode === "create" || paneMode === "edit") {
+      event.preventDefault();
+      paneMode = "view";
+      void rerender();
+      return;
+    }
+    event.preventDefault();
+    logseq.hideMainUI({ restoreEditingCursor: true });
+  });
+  escListenerAttached = true;
 }
 
 /**
