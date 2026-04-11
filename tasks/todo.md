@@ -86,7 +86,7 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 
 ### Phase 3 — UI plumbing
 
-- [ ] **4. Replace CSS in index.html** — `index.html`
+- [x] **4. Replace CSS in index.html** — `index.html`
       Port Variant D styles: panel grid, header with stats, sidebar (search, tabs, sched-item, +new button), detail pane (next-fire card, config card, field-grid, chips), recent-runs list, dark-mode variants, 680px responsive breakpoint.
       Done when: opening the dev build shows the new layout (with placeholder content); dark mode looks right.
       Est: 30 min
@@ -184,3 +184,4 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 - 2026-04-11 — Task 1 done: Vitest 2.1.9 installed, `npm test` reports "No test files found" as expected. Exit code 1 will flip to 0 once task 2 adds the first test file.
 - 2026-04-11 — Task 2 done (RED): 25 tests written across `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`. Suite fails to load because `src/schedule-helpers.ts` doesn't exist.
 - 2026-04-11 — Task 3 done (GREEN): `src/schedule-helpers.ts` implemented with 4 pure functions. All 25 tests pass on first run, `tsc --noEmit` clean.
+- 2026-04-11 — Task 4 done: `index.html` `<style>` block fully replaced with Variant D layout (panel grid, header, sidebar, detail pane, next-fire card, config card, recent-runs styles, detail-form styles for create/edit, 680px responsive breakpoint, full dark-mode variants). `npm run typecheck` and `npm run build` both clean. Note: panel will render visually broken until task 5+ rewrites `ui.ts` rendering — old class names (`scheduler-panel`, `scheduler-row`, etc.) no longer have CSS. Intentional intermediate state.
