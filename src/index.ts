@@ -13,7 +13,13 @@ const panelCallbacks: PanelCallbacks = {
     const schedules = await loadSchedules();
     const schedule = schedules.find((s) => s.id === scheduleId);
     if (!schedule) throw new Error("Schedule not found");
-    await engine.fire(schedule, readGlobalSettings(), new Date(), { force });
+    await engine.fire(
+      schedule,
+      readGlobalSettings(),
+      new Date(),
+      { force },
+      force ? "force" : "manual",
+    );
   },
 };
 
@@ -38,6 +44,24 @@ async function restart(): Promise<void> {
   const schedules = await loadSchedules();
   const settings = readGlobalSettings();
   engine.start(schedules, settings);
+}
+
+function applyThemeMode(mode: "light" | "dark"): void {
+  const root = document.documentElement;
+  if (mode === "dark") {
+    root.classList.add("dark");
+  } else {
+    root.classList.remove("dark");
+  }
+}
+
+async function syncInitialTheme(): Promise<void> {
+  try {
+    const cfg = await logseq.App.getUserConfigs();
+    applyThemeMode(cfg?.preferredThemeMode === "dark" ? "dark" : "light");
+  } catch (err) {
+    console.error("[scheduler] Failed to read initial theme:", err);
+  }
 }
 
 async function main() {
@@ -108,6 +132,12 @@ async function main() {
       logseq.showMainUI({ autoFocus: true });
     },
   );
+
+  // Sync the iframe's `<html>` class with Logseq's theme so the panel CSS
+  // can use `html.dark` selectors. Logseq's dark mode is a CSS class on the
+  // parent doc, not the OS color scheme, so prefers-color-scheme isn't enough.
+  await syncInitialTheme();
+  logseq.App.onThemeModeChanged(({ mode }) => applyThemeMode(mode));
 
   // Rebuild engine when the user-visible settings change.
   // (We also stash schedule JSON inside settings, so filter those out

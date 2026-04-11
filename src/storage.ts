@@ -22,35 +22,62 @@ function settings(): SettingsBag {
   return (logseq.settings ?? {}) as SettingsBag;
 }
 
+// In-memory caches.
+//
+// `logseq.updateSettings` is fire-and-forget IPC: the local `logseq.settings`
+// getter does not reflect the new value synchronously. Reading back from
+// `logseq.settings` immediately after a write returns stale data, which made
+// the panel appear frozen until reopened. We hold the authoritative copy in
+// memory and only fall through to `logseq.settings` on the first read after
+// plugin start.
+let schedulesCache: ScheduleEntry[] | null = null;
+let lastRunsCache: LastRunMap | null = null;
+let fireLogCache: FireLogEntry[] | null = null;
+
 export async function loadSchedules(): Promise<ScheduleEntry[]> {
+  if (schedulesCache !== null) return schedulesCache;
   try {
     const raw = settings()[SCHEDULES_KEY];
-    if (typeof raw !== "string" || !raw) return [];
+    if (typeof raw !== "string" || !raw) {
+      schedulesCache = [];
+      return schedulesCache;
+    }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as ScheduleEntry[]) : [];
+    schedulesCache = Array.isArray(parsed) ? (parsed as ScheduleEntry[]) : [];
+    return schedulesCache;
   } catch (err) {
     console.error("[scheduler] Failed to load schedules:", err);
-    return [];
+    schedulesCache = [];
+    return schedulesCache;
   }
 }
 
 export async function saveSchedules(schedules: ScheduleEntry[]): Promise<void> {
+  schedulesCache = [...schedules];
   logseq.updateSettings({ [SCHEDULES_KEY]: JSON.stringify(schedules) });
 }
 
 export async function loadLastRuns(): Promise<LastRunMap> {
+  if (lastRunsCache !== null) return lastRunsCache;
   try {
     const raw = settings()[LAST_RUN_KEY];
-    if (typeof raw !== "string" || !raw) return {};
+    if (typeof raw !== "string" || !raw) {
+      lastRunsCache = {};
+      return lastRunsCache;
+    }
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? (parsed as LastRunMap) : {};
+    lastRunsCache =
+      parsed && typeof parsed === "object" ? (parsed as LastRunMap) : {};
+    return lastRunsCache;
   } catch (err) {
     console.error("[scheduler] Failed to load last-runs:", err);
-    return {};
+    lastRunsCache = {};
+    return lastRunsCache;
   }
 }
 
 export async function saveLastRuns(map: LastRunMap): Promise<void> {
+  lastRunsCache = { ...map };
   logseq.updateSettings({ [LAST_RUN_KEY]: JSON.stringify(map) });
 }
 
@@ -61,21 +88,26 @@ export async function recordLastRun(scheduleId: string, at: number): Promise<voi
 }
 
 export async function loadFireLog(): Promise<FireLogEntry[]> {
+  if (fireLogCache !== null) return fireLogCache;
   try {
     const raw = settings()[FIRE_LOG_KEY];
-    if (typeof raw !== "string" || !raw) return [];
+    if (typeof raw !== "string" || !raw) {
+      fireLogCache = [];
+      return fireLogCache;
+    }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as FireLogEntry[]) : [];
+    fireLogCache = Array.isArray(parsed) ? (parsed as FireLogEntry[]) : [];
+    return fireLogCache;
   } catch (err) {
     console.error("[scheduler] Failed to load fire log:", err);
-    return [];
+    fireLogCache = [];
+    return fireLogCache;
   }
 }
 
 export async function appendFireLog(entry: FireLogEntry): Promise<void> {
   const log = await loadFireLog();
-  log.unshift(entry);
-  // Keep newest N entries
-  const trimmed = log.slice(0, FIRE_LOG_LIMIT);
-  logseq.updateSettings({ [FIRE_LOG_KEY]: JSON.stringify(trimmed) });
+  const next = [entry, ...log].slice(0, FIRE_LOG_LIMIT);
+  fireLogCache = next;
+  logseq.updateSettings({ [FIRE_LOG_KEY]: JSON.stringify(next) });
 }

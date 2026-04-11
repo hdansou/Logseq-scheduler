@@ -537,53 +537,54 @@
         .stats span:nth-child(3) { display: none; }
       }
 
-      /* Dark mode */
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #1f2024;
-          --fg: #e5e7eb;
-          --muted: #9ca3af;
-          --border: #2c2e36;
-          --hover: #2a2c32;
-          --accent: #60a5fa;
-          --accent-hover: #3b82f6;
-          --accent-soft: #1e293b;
-          --chip: #1e293b;
-          --chip-fg: #93c5fd;
-          --danger: #fca5a5;
-          --success: #34d399;
-          --sidebar: #17181c;
-        }
-        .close-btn { background: #2a2c32; }
-        .search input { background: #0f1013; }
-        .filter-tabs button { background: #2a2c32; color: var(--muted); }
-        .filter-tabs button.active { background: var(--fg); color: #1f2024; border-color: var(--fg); }
-        .sched-item.selected { background: #1f2024; }
-        .status.on { background: #064e3b; color: #6ee7b7; }
-        .status.off { background: #2a2c32; color: #9ca3af; }
-        .new-btn { background: #1f2024; }
-        .btn { background: #2a2c32; }
-        .btn:hover { background: #33363d; }
-        .btn-primary { background: var(--accent); color: #0f1013; border-color: var(--accent); }
-        .btn-primary:hover { background: var(--accent-hover); }
-        .btn-danger { background: #2a2c32; border-color: #7a2e2e; }
-        .btn-danger:hover { background: #3a1f1f; }
-        .card { background: #1f2024; }
-        .next-fire { background: #1e293b; border-color: #1e3a8a; }
-        .next-fire .icon { background: #0f1013; }
-        .next-fire .nf-label { color: #93c5fd; }
-        .next-fire .time { color: #dbeafe; }
-        .next-fire .countdown { color: #93c5fd; }
-        .field-grid code { background: #2a2c32; }
-        .chip { background: #1e3a8a; color: #dbeafe; }
-        .badge.created { background: #064e3b; color: #6ee7b7; }
-        .badge.exists { background: #2a2c32; color: #9ca3af; }
-        .badge.skipped { background: #422006; color: #fcd34d; }
-        .badge.error { background: #3a1f1f; color: #fca5a5; }
-        .run-row .source { background: #2a2c32; color: var(--muted); }
-        .detail-form input { background: #0f1013; }
-        .detail-form .form-error { background: #3a1f1f; border-color: #7a2e2e; }
+      /* Dark mode — driven by `html.dark` set from Logseq's theme via
+         logseq.App.onThemeModeChanged in index.ts. We don't use
+         prefers-color-scheme because Logseq's dark mode is a CSS class on
+         the parent doc, not an OS color-scheme change. */
+      html.dark {
+        --bg: #1f2024;
+        --fg: #e5e7eb;
+        --muted: #9ca3af;
+        --border: #2c2e36;
+        --hover: #2a2c32;
+        --accent: #60a5fa;
+        --accent-hover: #3b82f6;
+        --accent-soft: #1e293b;
+        --chip: #1e293b;
+        --chip-fg: #93c5fd;
+        --danger: #fca5a5;
+        --success: #34d399;
+        --sidebar: #17181c;
       }
+      html.dark .close-btn { background: #2a2c32; }
+      html.dark .search input { background: #0f1013; }
+      html.dark .filter-tabs button { background: #2a2c32; color: var(--muted); }
+      html.dark .filter-tabs button.active { background: var(--fg); color: #1f2024; border-color: var(--fg); }
+      html.dark .sched-item.selected { background: #1f2024; }
+      html.dark .status.on { background: #064e3b; color: #6ee7b7; }
+      html.dark .status.off { background: #2a2c32; color: #9ca3af; }
+      html.dark .new-btn { background: #1f2024; }
+      html.dark .btn { background: #2a2c32; }
+      html.dark .btn:hover { background: #33363d; }
+      html.dark .btn-primary { background: var(--accent); color: #0f1013; border-color: var(--accent); }
+      html.dark .btn-primary:hover { background: var(--accent-hover); }
+      html.dark .btn-danger { background: #2a2c32; border-color: #7a2e2e; }
+      html.dark .btn-danger:hover { background: #3a1f1f; }
+      html.dark .card { background: #1f2024; }
+      html.dark .next-fire { background: #1e293b; border-color: #1e3a8a; }
+      html.dark .next-fire .icon { background: #0f1013; }
+      html.dark .next-fire .nf-label { color: #93c5fd; }
+      html.dark .next-fire .time { color: #dbeafe; }
+      html.dark .next-fire .countdown { color: #93c5fd; }
+      html.dark .field-grid code { background: #2a2c32; }
+      html.dark .chip { background: #1e3a8a; color: #dbeafe; }
+      html.dark .badge.created { background: #064e3b; color: #6ee7b7; }
+      html.dark .badge.exists { background: #2a2c32; color: #9ca3af; }
+      html.dark .badge.skipped { background: #422006; color: #fcd34d; }
+      html.dark .badge.error { background: #3a1f1f; color: #fca5a5; }
+      html.dark .run-row .source { background: #2a2c32; color: var(--muted); }
+      html.dark .detail-form input { background: #0f1013; }
+      html.dark .detail-form .form-error { background: #3a1f1f; border-color: #7a2e2e; }
     </style>
   </head>
   <body>
