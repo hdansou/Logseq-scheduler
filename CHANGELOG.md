@@ -8,15 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Plugin `icon.png` (128×128) so the plugin can be loaded in production.
-- `README.md` with installation, usage, supported phrases, settings, and troubleshooting.
-- `CHANGELOG.md` tracking notable changes.
+- **Two-pane schedule manager UI.** Replaces the single-pane stacked-form layout with a sidebar list + detail pane, built from the approved Variant D mockup in `mockups/variant-d-refined.html`. Sidebar has search, All/Active/Paused filter tabs with counts, schedule items with ON/OFF pills, and a "+ New schedule" button at the bottom. Detail pane renders the selected schedule's full configuration, a live next-fire countdown, and recent runs — or the create/edit form when adding or modifying a schedule.
+- **Edit existing schedules.** The detail pane's Edit button reuses the create form pre-filled; saving replaces the schedule in place while preserving `id` and `createdAt`. Previously the only way to change a schedule was to delete and re-add it.
+- **Search schedules** by label (case-insensitive, partial match) directly from the sidebar. Input focus and cursor position are preserved across re-renders.
+- **Filter tabs** (All / Active / Paused) with counts that always reflect totals, not the current search.
+- **Header stats row** showing active schedule count, paused count, and the soonest next-fire countdown across all enabled schedules.
+- **Recent runs card** in the detail pane: last 10 fire-log entries for the selected schedule, each with a relative time, a source pill (`cron` / `manual` / `force` / `catch-up`), and a colour-coded outcome badge (`created` / `exists` / `skipped` / `error`). Error messages surface as row tooltips.
+- **Responsive layout at 680px.** Below the breakpoint the panes stack, a "← Schedules" back button appears on the detail pane, and the third header stat hides to prevent wrapping.
+- **Keyboard accessibility.** Sidebar items are real `<button>` elements with `aria-pressed` and a focus-visible outline. Search input has an `aria-label`. The create/edit form is a real `<form>` so Enter submits from any field.
+- **Vitest unit-test suite** for pure helpers (`src/schedule-helpers.ts`, 33 tests covering `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`, `formatPast`). New `npm test` script.
+- **Plugin `icon.png`** (128×128) so the plugin can be loaded in production.
+- **`README.md`** with installation, usage, supported phrases, settings, and troubleshooting.
+- **`CHANGELOG.md`** tracking notable changes.
+
+### Changed
+- **Dark mode follows Logseq's theme** instead of the OS colour scheme. Previously the plugin iframe used `@media (prefers-color-scheme: dark)`, which doesn't react to Logseq's CSS-class-based dark mode. `src/index.ts` now reads `logseq.App.getUserConfigs()` for the initial theme and subscribes to `logseq.App.onThemeModeChanged` to toggle a `dark` class on the iframe's `<html>`; the CSS uses `html.dark` selectors. Switches live without reopening the panel.
+- **Storage layer holds an in-memory authoritative cache.** `logseq.updateSettings` is fire-and-forget IPC, so `logseq.settings` doesn't reflect a write synchronously — reads immediately after writes returned stale data and made every mutation appear to do nothing until the panel was reopened. `src/storage.ts` now caches schedules, last-runs, and the fire log in module-level state; `logseq.settings` is only consulted on the first read after plugin start.
+
+### Fixed
+- **Run Now source mislabeled as `cron`.** `PanelCallbacks.runNow` in `src/index.ts` called `engine.fire` without passing the source argument, so fire-log entries for manual triggers got the default `cron`. Now passes `"manual"` or `"force"` based on the `force` flag.
 
 ### Planned
-- Fire-history UI: render recent entries from `_fireLogJson` in the panel, colour-coded by outcome, with a "Clear history" action.
-- Edit existing schedules in place (currently add / delete / toggle only).
 - Remove the obsolete `startupDelaySeconds` setting.
 - Migration: auto-stamp `createdAt` on pre-existing `ScheduleEntry` records, or document the delete + re-add workaround.
+- "Clear history" action for the Recent runs card.
+- Split `src/ui.ts` (~660 lines) into focused submodules — tracked in `REFACTOR_BACKLOG.md` as `[R-001]`.
 - Unit tests for `nl-cron.ts`, `suffix.ts`, and `db.ts`.
 
 ## [0.1.0] — 2026-04-10

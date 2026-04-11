@@ -1,6 +1,6 @@
 # Logseq Scheduler — Task Tracker
 
-**Last Updated:** 2026-04-11 (later)
+**Last Updated:** 2026-04-11 (two-pane UI redesign shipped)
 
 ## Current Sprint
 
@@ -19,18 +19,18 @@ in a real Logseq DB graph before this can be called done.
 
 ### Feature: Fire History UI
 The fire history is already persisted in `logseq.settings._fireLogJson` (created,
-exists, skipped, error outcomes per fire), but it isn't shown in the panel yet.
+exists, skipped, error outcomes per fire).
 
 - [x] Persist fire log entries via `appendFireLog`
-- [ ] Render the most recent N entries in the schedule panel (collapsible section)
-- [ ] Color-code outcomes (green=created, gray=exists, red=error)
+- [x] Render the most recent N entries in the schedule panel (now a "Recent runs" card in the detail pane, last 10 entries; not collapsible, but filtered by the selected schedule)
+- [x] Color-code outcomes (green=created, gray=exists, amber=skipped, red=error; see `badge.*` styles in `index.html`)
 - [ ] "Clear history" button
 
 ### Feature: Polish & Production Readiness
 - [x] **`icon.png` 128×128** — generated from `icon.svg` via `rsvg-convert`, lives at repo root next to `package.json`
 - [x] README.md with install / usage / settings / supported phrases / troubleshooting
 - [x] CHANGELOG.md covering 0.1.0 MVP
-- [ ] Edit existing schedules (currently only add / delete / toggle; user must delete + re-add to change anything)
+- [x] Edit existing schedules — detail pane has an Edit button that reuses the create form pre-filled; Save replaces the entry in place, preserving `id` and `createdAt`
 - [ ] Remove the obsolete `startupDelaySeconds` setting (no longer used by the polling engine — currently kept as a no-op for back-compat)
 - [ ] Migration: existing `ScheduleEntry` records in settings are missing the new `createdAt` field, so they will fall through to `?? 0` and may backfill on the next poll. Either auto-stamp them on load or document the "delete + re-add" workaround.
 
@@ -49,6 +49,32 @@ exists, skipped, error outcomes per fire), but it isn't shown in the panel yet.
 ---
 
 ## Completed
+
+### Feature: Two-Pane UI Redesign (completed 2026-04-11)
+Motivation: the original single-pane stacked-form panel didn't scale past a handful
+of schedules and had no room for per-schedule detail, edit, or run history.
+Spec and task breakdown live in `tasks/todo.md`; reference mockup at
+`mockups/variant-d-refined.html`.
+
+- [x] Sidebar + detail pane layout with full re-render and `captureFocus` / `restoreFocus` so typing in search doesn't drop focus
+- [x] Module-level UI state (`selectedId`, `searchQuery`, `activeTab`, `paneMode`) survives innerHTML rebuilds
+- [x] Sidebar search (case-insensitive label match) with counts-stay-totals behaviour
+- [x] All / Active / Paused filter tabs with schedule counts
+- [x] Sidebar schedule list with ON/OFF status pills; items are `<button>` elements with `aria-pressed` and focus-visible outline
+- [x] Header stats (active count, paused count, "Next in N days" via `computeStats` + `formatCountdown`)
+- [x] Detail pane view mode with title row, Run Now / Force Run / Pause-Resume / Edit / Delete buttons, soft-blue next-fire card with live countdown, configuration card (tags as chips), Recent runs card
+- [x] Detail pane create mode (+ New schedule button in sidebar; form lives in the detail pane, Save is a real `<form>` submit so Enter works)
+- [x] Detail pane edit mode (reuses the create form pre-filled; replaces entry in place preserving `id` and `createdAt`)
+- [x] Empty state ("No schedules yet" + ⏰ icon) and auto-select-first on panel open
+- [x] Responsive breakpoint at 680px: panes stack, back button appears on detail, third stat hides
+- [x] Dark mode now follows Logseq's theme via `logseq.App.getUserConfigs` + `logseq.App.onThemeModeChanged` (was `prefers-color-scheme` which doesn't fire for Logseq's CSS-class-based dark mode)
+- [x] Vitest unit-test suite for pure helpers — `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`, `formatPast` (33 tests)
+- [x] Storage now holds an in-memory authoritative cache so reads after writes return fresh data (fixes the stale-rerender bug where `logseq.updateSettings` is fire-and-forget IPC)
+- [x] `PanelCallbacks.runNow` passes `"manual"` or `"force"` to `engine.fire` so the fire log records the right source
+- [x] Code review pass, all 🟡 issues fixed (accessibility, error handling, form Enter-to-submit, stale btn ref, escapeHtml single-quote)
+- [x] Manual test in Logseq via the `logseq-plugin-tester` skill — two passes; first surfaced three bugs, second confirmed fixes
+
+Refactor backlog: `REFACTOR_BACKLOG.md` item `[R-001]` — `src/ui.ts` is ~660 lines, split into `ui/state.ts`, `ui/sidebar.ts`, `ui/detail.ts`, `ui/form.ts`, `ui/focus.ts` in a dedicated session.
 
 ### Feature: Project Scaffold (completed 2026-04-09)
 - [x] REQUIREMENTS.md
@@ -85,7 +111,7 @@ exists, skipped, error outcomes per fire), but it isn't shown in the panel yet.
 - [x] Schedule list with toggle / delete / Run Now / Force Run
 - [x] "Next fire" timestamp displayed per schedule
 - [x] Modal styling (CSS lives in `index.html` because `provideStyle` targets the wrong document)
-- [x] Light + dark mode support via `prefers-color-scheme`
+- [x] Light + dark mode support (originally via `prefers-color-scheme`; later changed to follow Logseq's theme via `logseq.App.onThemeModeChanged` — see the 2026-04-11 redesign entry above)
 
 ### Feature: Datascript-Based Page Existence Check (completed 2026-04-10)
 - [x] Identified root cause: `logseq.Editor.getPage()` returned stale / non-page entities
