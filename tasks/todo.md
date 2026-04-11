@@ -67,7 +67,7 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 
 ### Phase 1 — Setup
 
-- [ ] **1. Add Vitest** — `package.json`, `vitest.config.ts`
+- [x] **1. Add Vitest** — `package.json`, `vitest.config.ts`
       Add `vitest` as devDep, add `"test": "vitest"` script, minimal config (node env, no jsdom).
       Done when: `npm test` runs and reports "No test files found".
       Est: 10 min
@@ -181,4 +181,4 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 ## Progress Log
 
 <!-- Updated as tasks complete -->
-- (none yet)
+- 2026-04-11 — Task 1 done: Vitest 2.1.9 installed, `npm test` reports "No test files found" as expected. Exit code 1 will flip to 0 once task 2 adds the first test file.
