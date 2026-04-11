@@ -124,13 +124,12 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
       Done when: selecting any schedule shows full details; all five buttons work.
       Est: 30 min
 
-- [ ] **11. Zero-state placeholder** — `src/ui.ts`
-      When `schedules.length === 0`, sidebar shows "No schedules yet" message and detail pane shows a centered placeholder pointing at + New schedule.
-      Done when: deleting the last schedule transitions cleanly to placeholder; + New schedule from the placeholder works.
+- [x] **11. Zero-state placeholder** — `src/ui.ts`
+      _Done as part of task 5 — see Progress Log._ Sidebar shows "No schedules yet"; detail pane shows centered placeholder with ⏰ icon and a hint to click + New schedule.
       Est: 10 min
 
-- [ ] **12. Recent runs card** — `src/ui.ts`
-      Below the configuration card. Pulls from `loadFireLog()` filtered by `selectedId`, last 10 entries. Each row: relative time, source pill (`cron`/`manual`/`force`/`catch-up`), outcome badge (`created` green / `exists` gray / `skipped` amber / `error` red). Empty state: "No runs yet."
+- [x] **12. Recent runs card** — `src/ui.ts`
+      Below the configuration card. Pulls from `loadFireLog()` filtered by `selectedId`, last 10 entries. Each row: relative time via new `formatPast` helper, source pill, outcome badge with color. Error message becomes a tooltip on the row. Added 8 unit tests for `formatPast`.
       Done when: a freshly-fired schedule shows the run in the card; old runs render with right colors.
       Est: 25 min
 
@@ -146,8 +145,8 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 
 ### Phase 6 — Header and responsive
 
-- [ ] **15. Header stats** — `src/ui.ts`
-      `Scheduler` title, then stats row: active count with green dot, paused count, "Next in N days" via `computeStats` + `formatCountdown`. Re-renders along with the rest.
+- [x] **15. Header stats** — `src/ui.ts`
+      `Scheduler` title, then stats row: active count with green dot, paused count, "Next {countdown}" via `computeStats` + `formatCountdown`. Re-renders along with the rest.
       Done when: stats reflect current state and update on add/delete/toggle.
       Est: 15 min
 
@@ -187,4 +186,5 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 - 2026-04-11 — Tasks 7 + 8 done: Search input wired with `onInput → searchQuery → rerender → restoreFocus`. Filter tabs wired with click handler that sets `activeTab`. Tab counts always show totals (not filtered totals). Sidebar list now uses `searchSchedules(filterSchedules(cachedSchedules, activeTab), searchQuery)`. New "No schedules match" empty state for when filtering produces no results.
 - 2026-04-11 — Task 9 done: + New schedule button wired. Sets `paneMode="create"`, `selectedId=null`. Detail pane shows a form placeholder until task 13.
 - 2026-04-11 — Task 10 done: Detail pane view mode renders the rich layout — title row with action buttons (Run Now, Force Run, Pause/Resume, Edit, Delete), next-fire card with `formatCountdown`, configuration card with tags as chips. All actions wired: Run Now / Force Run reuse the existing button-feedback pattern (Running… → Done ✓ → reset). Delete clears `selectedId` so `ensureValidSelection` picks the next item. Edit currently routes to a placeholder. Toggle is now a button in the title-actions row instead of a checkbox in the sidebar (the sidebar shows the ON/OFF pill as a passive indicator). New `ensureValidSelection` helper centralises the auto-select-first logic for both initial render and post-delete cleanup.
+- 2026-04-11 — Tasks 11 + 12 + 15 done: Zero-state was already in place from task 5. Added `formatPast` helper to `schedule-helpers.ts` (with 8 unit tests, total now 33). Recent runs card renders below the configuration card, pulls from cached fire log filtered by `selectedId`, shows last 10 entries with relative time / source pill / colored outcome badge. Error messages surface as tooltips. Header stats now show active count with green dot, paused count, and "Next {countdown}" computed from `computeStats(cachedSchedules, callbacks.nextRunFor)`. `rerender` now loads schedules and fire log in parallel via `Promise.all`.
 - 2026-04-11 — Tasks 5 + 6 done (merged): Realised on contact with implementation that pure "state vars only" couldn't ship without sidebar list rendering — the state plumbing is meaningless without something selectable. Combined into one logical change. New `src/ui.ts` has: module-level state (`selectedId`/`searchQuery`/`activeTab`/`paneMode`/`cachedSchedules`/`callbacks`), helper render functions (`renderHeader`/`renderSidebar`/`renderSchedItem`/`renderDetail`), sidebar list with click-to-select, detail-pane placeholder, `captureFocus`/`restoreFocus` for the search input, `has-selection` class on the panel for the responsive layout. Existing add/delete/run-now/force-run/toggle handlers removed — they come back in tasks 12 (recent runs needs nothing extra), 13 (create), 14 (edit), and partially in task 10 (view-mode actions). Bundle dropped 4kB. Typecheck/test/build all clean. Filter tabs / search input / +new button render in the DOM but don't have handlers yet — wired by tasks 7/8/9.

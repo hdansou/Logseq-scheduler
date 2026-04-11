@@ -1,8 +1,10 @@
-import { loadSchedules, saveSchedules } from "./storage";
-import type { ScheduleEntry } from "./types";
+import { loadFireLog, loadSchedules, saveSchedules } from "./storage";
+import type { FireLogEntry, ScheduleEntry } from "./types";
 import {
+  computeStats,
   filterSchedules,
   formatCountdown,
+  formatPast,
   searchSchedules,
   type FilterTab,
 } from "./schedule-helpers";
@@ -22,6 +24,7 @@ let searchQuery = "";
 let activeTab: FilterTab = "all";
 let paneMode: PaneMode = "view";
 let cachedSchedules: ScheduleEntry[] = [];
+let cachedFireLog: FireLogEntry[] = [];
 let callbacks: PanelCallbacks | null = null;
 
 /**
@@ -42,7 +45,10 @@ async function rerender(): Promise<void> {
   const root = document.getElementById("app");
   if (!root || !callbacks) return;
 
-  cachedSchedules = await loadSchedules();
+  [cachedSchedules, cachedFireLog] = await Promise.all([
+    loadSchedules(),
+    loadFireLog(),
+  ]);
   ensureValidSelection();
 
   const focusInfo = captureFocus(root);
@@ -79,11 +85,20 @@ function panelShell(): string {
 }
 
 function renderHeader(): string {
-  // Stats are added by a later task; header is title + close button only.
+  const stats = computeStats(
+    cachedSchedules,
+    (id) => callbacks?.nextRunFor(id) ?? null,
+  );
+  const nextLabel = formatCountdown(stats.soonestNextFire, new Date());
   return `
     <header class="panel-header">
       <div class="panel-header-left">
         <h2>Scheduler</h2>
+        <div class="stats">
+          <span><span class="dot"></span><b>${stats.activeCount}</b> active</span>
+          <span><b>${stats.pausedCount}</b> paused</span>
+          <span>Next ${escapeHtml(nextLabel)}</span>
+        </div>
       </div>
       <button id="close-panel" class="close-btn" type="button">Close</button>
     </header>
@@ -205,7 +220,41 @@ function renderDetail(): string {
       </div>
       ${renderNextFireCard(selected)}
       ${renderConfigCard(selected)}
+      ${renderRunsCard(selected)}
     </main>
+  `;
+}
+
+function renderRunsCard(s: ScheduleEntry): string {
+  const runs = cachedFireLog
+    .filter((entry) => entry.scheduleId === s.id)
+    .slice(0, 10);
+  const now = new Date();
+
+  const body =
+    runs.length === 0
+      ? `<div class="runs-empty">No runs yet.</div>`
+      : `<div class="runs-list">${runs.map((entry) => renderRunRow(entry, now)).join("")}</div>`;
+
+  return `
+    <div class="card">
+      <h4>Recent runs</h4>
+      ${body}
+    </div>
+  `;
+}
+
+function renderRunRow(entry: FireLogEntry, now: Date): string {
+  const when = formatPast(new Date(entry.at), now);
+  const errorAttr = entry.error
+    ? ` title="${escapeHtml(entry.error)}"`
+    : "";
+  return `
+    <div class="run-row"${errorAttr}>
+      <span class="when">${escapeHtml(when)}</span>
+      <span class="source">${escapeHtml(entry.source)}</span>
+      <span class="badge ${escapeHtml(entry.outcome)}">${escapeHtml(entry.outcome)}</span>
+    </div>
   `;
 }
 

@@ -73,3 +73,23 @@ export function formatCountdown(target: Date | null, now: Date): string {
   const months = Math.floor(diff / MONTH_MS);
   return months === 1 ? "in 1 month" : `in ${months} months`;
 }
+
+export function formatPast(target: Date, now: Date): string {
+  const diff = now.getTime() - target.getTime();
+  if (diff < 0) return target.toLocaleString();
+  if (diff < MIN_MS) return "just now";
+  if (diff < HOUR_MS) {
+    const min = Math.floor(diff / MIN_MS);
+    return min === 1 ? "1 min ago" : `${min} min ago`;
+  }
+  if (diff < DAY_MS) {
+    const hr = Math.floor(diff / HOUR_MS);
+    return hr === 1 ? "1 hr ago" : `${hr} hr ago`;
+  }
+  if (diff < 2 * DAY_MS) return "yesterday";
+  if (diff < MONTH_MS) {
+    const days = Math.floor(diff / DAY_MS);
+    return `${days} days ago`;
+  }
+  return target.toLocaleDateString();
+}

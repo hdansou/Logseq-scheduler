@@ -4,6 +4,7 @@ import {
   searchSchedules,
   computeStats,
   formatCountdown,
+  formatPast,
 } from "../schedule-helpers";
 import type { ScheduleEntry } from "../types";
 
@@ -194,5 +195,44 @@ describe("formatCountdown", () => {
   it("returns plural months for differences >= 60 days", () => {
     const sixtyFiveDays = new Date("2026-06-15T12:00:00Z");
     expect(formatCountdown(sixtyFiveDays, now)).toBe("in 2 months");
+  });
+});
+
+describe("formatPast", () => {
+  const now = new Date("2026-04-11T12:00:00Z");
+
+  it("returns 'just now' for sub-minute past", () => {
+    expect(formatPast(new Date("2026-04-11T11:59:30Z"), now)).toBe("just now");
+  });
+
+  it("returns '1 min ago' for exactly one minute past", () => {
+    expect(formatPast(new Date("2026-04-11T11:59:00Z"), now)).toBe("1 min ago");
+  });
+
+  it("returns 'N min ago' for sub-hour past", () => {
+    expect(formatPast(new Date("2026-04-11T11:55:00Z"), now)).toBe("5 min ago");
+  });
+
+  it("returns '1 hr ago' for exactly one hour past", () => {
+    expect(formatPast(new Date("2026-04-11T11:00:00Z"), now)).toBe("1 hr ago");
+  });
+
+  it("returns 'N hr ago' for sub-day past", () => {
+    expect(formatPast(new Date("2026-04-11T09:00:00Z"), now)).toBe("3 hr ago");
+  });
+
+  it("returns 'yesterday' for differences between 24 and 48 hours", () => {
+    expect(formatPast(new Date("2026-04-10T12:00:00Z"), now)).toBe("yesterday");
+  });
+
+  it("returns 'N days ago' for multi-day past within a month", () => {
+    expect(formatPast(new Date("2026-04-05T12:00:00Z"), now)).toBe("6 days ago");
+  });
+
+  it("falls back to a date string for past further than 30 days", () => {
+    const longAgo = new Date("2026-02-01T12:00:00Z");
+    const result = formatPast(longAgo, now);
+    expect(result).not.toMatch(/ago$/);
+    expect(result).not.toBe("yesterday");
   });
 });
