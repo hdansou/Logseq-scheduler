@@ -112,16 +112,16 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
       Done when: tabs filter correctly; counts always reflect totals, not filtered totals.
       Est: 15 min
 
-- [ ] **9. "+ New schedule" button** — `src/ui.ts`
+- [x] **9. "+ New schedule" button** — `src/ui.ts`
       Button at the bottom of the sidebar. Click sets `paneMode="create"` and `selectedId=null`, re-renders.
       Done when: clicking + New shows the (still empty) create form in the detail pane.
       Est: 10 min
 
 ### Phase 5 — Detail pane
 
-- [ ] **10. Detail pane view mode** — `src/ui.ts`
-      Title row (label + subtitle + actions: ▶ Run Now / ⟳ Force Run / Edit / Delete), next-fire card (icon + label + formatted time + countdown via `formatCountdown`, hidden when paused or null), configuration card (label, page name, tags as chips, schedule text, cron in `<code>`, enabled toggle). Wire Run Now / Force Run / Delete to existing callbacks.
-      Done when: selecting any schedule shows full details; all four buttons work.
+- [x] **10. Detail pane view mode** — `src/ui.ts`
+      Title row (label + subtitle + actions: ▶ Run Now / ⟳ Force Run / Pause/Resume / Edit / Delete), next-fire card (hidden when paused or no next-fire), configuration card (label, page name, tags as chips, schedule text, cron in `<code>`, status). Wire Run Now / Force Run / Pause-Resume / Delete to existing callbacks. Edit sets `paneMode="edit"` (placeholder until task 14).
+      Done when: selecting any schedule shows full details; all five buttons work.
       Est: 30 min
 
 - [ ] **11. Zero-state placeholder** — `src/ui.ts`
@@ -185,4 +185,6 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 - 2026-04-11 — Task 3 done (GREEN): `src/schedule-helpers.ts` implemented with 4 pure functions. All 25 tests pass on first run, `tsc --noEmit` clean.
 - 2026-04-11 — Task 4 done: `index.html` `<style>` block fully replaced with Variant D layout (panel grid, header, sidebar, detail pane, next-fire card, config card, recent-runs styles, detail-form styles for create/edit, 680px responsive breakpoint, full dark-mode variants). `npm run typecheck` and `npm run build` both clean. Note: panel will render visually broken until task 5+ rewrites `ui.ts` rendering — old class names (`scheduler-panel`, `scheduler-row`, etc.) no longer have CSS. Intentional intermediate state.
 - 2026-04-11 — Tasks 7 + 8 done: Search input wired with `onInput → searchQuery → rerender → restoreFocus`. Filter tabs wired with click handler that sets `activeTab`. Tab counts always show totals (not filtered totals). Sidebar list now uses `searchSchedules(filterSchedules(cachedSchedules, activeTab), searchQuery)`. New "No schedules match" empty state for when filtering produces no results.
+- 2026-04-11 — Task 9 done: + New schedule button wired. Sets `paneMode="create"`, `selectedId=null`. Detail pane shows a form placeholder until task 13.
+- 2026-04-11 — Task 10 done: Detail pane view mode renders the rich layout — title row with action buttons (Run Now, Force Run, Pause/Resume, Edit, Delete), next-fire card with `formatCountdown`, configuration card with tags as chips. All actions wired: Run Now / Force Run reuse the existing button-feedback pattern (Running… → Done ✓ → reset). Delete clears `selectedId` so `ensureValidSelection` picks the next item. Edit currently routes to a placeholder. Toggle is now a button in the title-actions row instead of a checkbox in the sidebar (the sidebar shows the ON/OFF pill as a passive indicator). New `ensureValidSelection` helper centralises the auto-select-first logic for both initial render and post-delete cleanup.
 - 2026-04-11 — Tasks 5 + 6 done (merged): Realised on contact with implementation that pure "state vars only" couldn't ship without sidebar list rendering — the state plumbing is meaningless without something selectable. Combined into one logical change. New `src/ui.ts` has: module-level state (`selectedId`/`searchQuery`/`activeTab`/`paneMode`/`cachedSchedules`/`callbacks`), helper render functions (`renderHeader`/`renderSidebar`/`renderSchedItem`/`renderDetail`), sidebar list with click-to-select, detail-pane placeholder, `captureFocus`/`restoreFocus` for the search input, `has-selection` class on the panel for the responsive layout. Existing add/delete/run-now/force-run/toggle handlers removed — they come back in tasks 12 (recent runs needs nothing extra), 13 (create), 14 (edit), and partially in task 10 (view-mode actions). Bundle dropped 4kB. Typecheck/test/build all clean. Filter tabs / search input / +new button render in the DOM but don't have handlers yet — wired by tasks 7/8/9.

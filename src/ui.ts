@@ -1,7 +1,8 @@
-import { loadSchedules } from "./storage";
+import { loadSchedules, saveSchedules } from "./storage";
 import type { ScheduleEntry } from "./types";
 import {
   filterSchedules,
+  formatCountdown,
   searchSchedules,
   type FilterTab,
 } from "./schedule-helpers";
@@ -25,18 +26,10 @@ let callbacks: PanelCallbacks | null = null;
 
 /**
  * Entry point invoked when the user opens the panel via toolbar or command
- * palette. Loads schedules from storage, seeds initial selection, and
- * triggers the first render.
+ * palette.
  */
 export async function renderPanel(cb: PanelCallbacks): Promise<void> {
   callbacks = cb;
-  cachedSchedules = await loadSchedules();
-
-  // Auto-select first schedule on open if nothing is selected yet.
-  if (!selectedId && cachedSchedules.length > 0 && paneMode === "view") {
-    selectedId = cachedSchedules[0].id;
-  }
-
   await rerender();
 }
 
@@ -50,11 +43,24 @@ async function rerender(): Promise<void> {
   if (!root || !callbacks) return;
 
   cachedSchedules = await loadSchedules();
+  ensureValidSelection();
 
   const focusInfo = captureFocus(root);
   root.innerHTML = panelShell();
   wireUp(root, callbacks);
   restoreFocus(root, focusInfo);
+}
+
+/**
+ * Selects the first schedule when nothing is selected, or clears the
+ * selection if the previously-selected schedule was deleted. Only runs in
+ * view mode — create/edit modes are intentionally allowed to have no
+ * selected item.
+ */
+function ensureValidSelection(): void {
+  if (paneMode !== "view") return;
+  if (selectedId && cachedSchedules.some((s) => s.id === selectedId)) return;
+  selectedId = cachedSchedules[0]?.id ?? null;
 }
 
 function panelShell(): string {
@@ -136,6 +142,17 @@ function renderSchedItem(s: ScheduleEntry): string {
 }
 
 function renderDetail(): string {
+  if (paneMode === "create") {
+    // Placeholder — task 13 (create mode) renders the real form here.
+    return `
+      <main class="detail">
+        <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
+        <h3>New schedule</h3>
+        <div class="detail-empty">Form coming in the next task.</div>
+      </main>
+    `;
+  }
+
   if (cachedSchedules.length === 0) {
     return `
       <main class="detail">
@@ -159,18 +176,75 @@ function renderDetail(): string {
     `;
   }
 
-  // Placeholder for the rich view mode (title row, actions, next-fire card,
-  // configuration card, recent runs). Filled in by later tasks.
+  if (paneMode === "edit") {
+    // Placeholder — task 14 (edit mode) renders the real form here.
+    return `
+      <main class="detail">
+        <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
+        <h3>Edit ${escapeHtml(selected.label)}</h3>
+        <div class="detail-empty">Form coming in the next task.</div>
+      </main>
+    `;
+  }
+
   return `
     <main class="detail">
       <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
       <div class="title-row">
         <div>
           <h3>${escapeHtml(selected.label)}</h3>
-          <div class="subtitle">${escapeHtml(selected.naturalLanguage)}</div>
+          <div class="subtitle">${escapeHtml(selected.naturalLanguage)} · ${selected.enabled ? "Active" : "Paused"}</div>
+        </div>
+        <div class="title-actions">
+          <button class="btn run-now" data-id="${escapeHtml(selected.id)}" type="button">▶ Run Now</button>
+          <button class="btn force-run" data-id="${escapeHtml(selected.id)}" type="button">⟳ Force Run</button>
+          <button class="btn toggle-enabled" data-id="${escapeHtml(selected.id)}" type="button">${selected.enabled ? "Pause" : "Resume"}</button>
+          <button class="btn edit-schedule" data-id="${escapeHtml(selected.id)}" type="button">Edit</button>
+          <button class="btn btn-danger delete-schedule" data-id="${escapeHtml(selected.id)}" type="button">Delete</button>
         </div>
       </div>
+      ${renderNextFireCard(selected)}
+      ${renderConfigCard(selected)}
     </main>
+  `;
+}
+
+function renderNextFireCard(s: ScheduleEntry): string {
+  if (!s.enabled || !callbacks) return "";
+  const target = callbacks.nextRunFor(s.id);
+  if (!target) return "";
+  const countdown = formatCountdown(target, new Date());
+  return `
+    <div class="next-fire">
+      <div class="icon">⏱</div>
+      <div>
+        <div class="nf-label">Next fire</div>
+        <div class="time">${escapeHtml(target.toLocaleString())}</div>
+      </div>
+      <div class="countdown">${escapeHtml(countdown)}</div>
+    </div>
+  `;
+}
+
+function renderConfigCard(s: ScheduleEntry): string {
+  const tagsHtml =
+    s.tags.length === 0
+      ? `<em>no tags</em>`
+      : s.tags
+          .map((t) => `<span class="chip">${escapeHtml(t)}</span>`)
+          .join("");
+  return `
+    <div class="card">
+      <h4>Configuration</h4>
+      <dl class="field-grid">
+        <dt>Label</dt><dd>${escapeHtml(s.label)}</dd>
+        <dt>Page name</dt><dd>${escapeHtml(s.pageName)}</dd>
+        <dt>Tags</dt><dd class="chips">${tagsHtml}</dd>
+        <dt>Schedule</dt><dd>${escapeHtml(s.naturalLanguage)}</dd>
+        <dt>Cron</dt><dd><code>${escapeHtml(s.cron)}</code></dd>
+        <dt>Status</dt><dd>${s.enabled ? "✓ Active" : "○ Paused"}</dd>
+      </dl>
+    </div>
   `;
 }
 
@@ -214,6 +288,94 @@ function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
         void rerender();
       });
     });
+
+  root
+    .querySelector<HTMLButtonElement>("#new-schedule")
+    ?.addEventListener("click", () => {
+      paneMode = "create";
+      selectedId = null;
+      void rerender();
+    });
+
+  attachRunHandler(root, ".run-now", false);
+  attachRunHandler(root, ".force-run", true);
+
+  root
+    .querySelectorAll<HTMLButtonElement>(".toggle-enabled")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        if (!id) return;
+        const list = await loadSchedules();
+        const item = list.find((s) => s.id === id);
+        if (!item) return;
+        item.enabled = !item.enabled;
+        await saveSchedules(list);
+        await callbacks?.onChange();
+        await rerender();
+      });
+    });
+
+  root
+    .querySelectorAll<HTMLButtonElement>(".edit-schedule")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.id;
+        if (!id) return;
+        selectedId = id;
+        paneMode = "edit";
+        void rerender();
+      });
+    });
+
+  root
+    .querySelectorAll<HTMLButtonElement>(".delete-schedule")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        if (!id) return;
+        const list = (await loadSchedules()).filter((s) => s.id !== id);
+        await saveSchedules(list);
+        if (selectedId === id) selectedId = null;
+        await callbacks?.onChange();
+        await rerender();
+      });
+    });
+}
+
+function attachRunHandler(
+  root: HTMLElement,
+  selector: string,
+  force: boolean,
+): void {
+  root.querySelectorAll<HTMLButtonElement>(selector).forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      if (!id || !callbacks) return;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Running…";
+      try {
+        await callbacks.runNow(id, force);
+        btn.textContent = "Done ✓";
+        setTimeout(() => {
+          void rerender();
+        }, 600);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[scheduler-ui] ${selector} failed:`, err);
+        btn.textContent = "Failed";
+        btn.title = message;
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          if (btn.textContent === "Running…" || btn.textContent === "Failed") {
+            btn.textContent = originalText;
+          }
+        }, 1500);
+      }
+    });
+  });
 }
 
 interface FocusInfo {
