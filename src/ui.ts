@@ -27,6 +27,7 @@ let paneMode: PaneMode = "view";
 let cachedSchedules: ScheduleEntry[] = [];
 let cachedFireLog: FireLogEntry[] = [];
 let callbacks: PanelCallbacks | null = null;
+let needsInitialSeed = true;
 
 /**
  * Entry point invoked when the user opens the panel via toolbar or command
@@ -34,6 +35,7 @@ let callbacks: PanelCallbacks | null = null;
  */
 export async function renderPanel(cb: PanelCallbacks): Promise<void> {
   callbacks = cb;
+  needsInitialSeed = true;
   await rerender();
 }
 
@@ -50,7 +52,12 @@ async function rerender(): Promise<void> {
     loadSchedules(),
     loadFireLog(),
   ]);
-  ensureValidSelection();
+
+  if (needsInitialSeed) {
+    seedInitialSelection();
+    needsInitialSeed = false;
+  }
+  cleanupStaleSelection();
 
   const focusInfo = captureFocus(root);
   root.innerHTML = panelShell();
@@ -59,15 +66,24 @@ async function rerender(): Promise<void> {
 }
 
 /**
- * Selects the first schedule when nothing is selected, or clears the
- * selection if the previously-selected schedule was deleted. Only runs in
- * view mode — create/edit modes are intentionally allowed to have no
- * selected item.
+ * On panel open: pre-select the first schedule if no selection survives
+ * from a previous session. Skipped in create/edit mode.
  */
-function ensureValidSelection(): void {
+function seedInitialSelection(): void {
   if (paneMode !== "view") return;
   if (selectedId && cachedSchedules.some((s) => s.id === selectedId)) return;
   selectedId = cachedSchedules[0]?.id ?? null;
+}
+
+/**
+ * Clears the selection if the schedule it points to no longer exists
+ * (e.g., deleted in another tab). Does NOT auto-pick a new selection —
+ * that's the responsibility of explicit handlers like delete.
+ */
+function cleanupStaleSelection(): void {
+  if (selectedId && !cachedSchedules.some((s) => s.id === selectedId)) {
+    selectedId = null;
+  }
 }
 
 function panelShell(): string {
@@ -341,6 +357,7 @@ function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
     .querySelector<HTMLButtonElement>("#back-to-list")
     ?.addEventListener("click", () => {
       selectedId = null;
+      paneMode = "view";
       void rerender();
     });
 
@@ -408,7 +425,9 @@ function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
         if (!id) return;
         const list = (await loadSchedules()).filter((s) => s.id !== id);
         await saveSchedules(list);
-        if (selectedId === id) selectedId = null;
+        if (selectedId === id) {
+          selectedId = list[0]?.id ?? null;
+        }
         await callbacks?.onChange();
         await rerender();
       });
