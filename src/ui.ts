@@ -1,3 +1,4 @@
+import { parseNaturalLanguage } from "./nl-cron";
 import { loadFireLog, loadSchedules, saveSchedules } from "./storage";
 import type { FireLogEntry, ScheduleEntry } from "./types";
 import {
@@ -158,14 +159,7 @@ function renderSchedItem(s: ScheduleEntry): string {
 
 function renderDetail(): string {
   if (paneMode === "create") {
-    // Placeholder — task 13 (create mode) renders the real form here.
-    return `
-      <main class="detail">
-        <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
-        <h3>New schedule</h3>
-        <div class="detail-empty">Form coming in the next task.</div>
-      </main>
-    `;
+    return renderScheduleForm(null);
   }
 
   if (cachedSchedules.length === 0) {
@@ -192,14 +186,7 @@ function renderDetail(): string {
   }
 
   if (paneMode === "edit") {
-    // Placeholder — task 14 (edit mode) renders the real form here.
-    return `
-      <main class="detail">
-        <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
-        <h3>Edit ${escapeHtml(selected.label)}</h3>
-        <div class="detail-empty">Form coming in the next task.</div>
-      </main>
-    `;
+    return renderScheduleForm(selected);
   }
 
   return `
@@ -255,6 +242,42 @@ function renderRunRow(entry: FireLogEntry, now: Date): string {
       <span class="source">${escapeHtml(entry.source)}</span>
       <span class="badge ${escapeHtml(entry.outcome)}">${escapeHtml(entry.outcome)}</span>
     </div>
+  `;
+}
+
+function renderScheduleForm(initial: ScheduleEntry | null): string {
+  const label = initial?.label ?? "";
+  const pageName = initial?.pageName ?? "";
+  const tags = initial?.tags.join(", ") ?? "";
+  const nl = initial?.naturalLanguage ?? "";
+  const cronText = initial?.cron ? `cron: ${initial.cron}` : "cron: —";
+  const title = initial ? `Edit schedule` : "New schedule";
+
+  return `
+    <main class="detail">
+      <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
+      <h3>${escapeHtml(title)}</h3>
+      <div class="detail-form">
+        <label>Label
+          <input id="form-label" type="text" value="${escapeHtml(label)}" placeholder="Personal Weekly Review" />
+        </label>
+        <label>Page name
+          <input id="form-page-name" type="text" value="${escapeHtml(pageName)}" placeholder="Weekly Review" />
+        </label>
+        <label>Tags (comma-separated)
+          <input id="form-tags" type="text" value="${escapeHtml(tags)}" placeholder="weekly-review, personal" />
+        </label>
+        <label>When
+          <input id="form-nl" type="text" value="${escapeHtml(nl)}" placeholder="every Saturday at 11 AM" />
+        </label>
+        <div class="cron-preview" id="form-cron-preview">${escapeHtml(cronText)}</div>
+        <div class="form-error" id="form-error" style="display:none;"></div>
+        <div class="form-actions">
+          <button type="button" class="btn" id="form-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary" id="form-save">Save</button>
+        </div>
+      </div>
+    </main>
   `;
 }
 
@@ -389,6 +412,132 @@ function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
         await callbacks?.onChange();
         await rerender();
       });
+    });
+
+  if (paneMode === "create" || paneMode === "edit") {
+    wireUpScheduleForm(root, paneMode);
+  }
+}
+
+function wireUpScheduleForm(
+  root: HTMLElement,
+  mode: "create" | "edit",
+): void {
+  const cronPreview = root.querySelector<HTMLElement>("#form-cron-preview");
+  const nlInput = root.querySelector<HTMLInputElement>("#form-nl");
+
+  nlInput?.addEventListener("input", () => {
+    if (!cronPreview) return;
+    const value = nlInput.value.trim();
+    if (!value) {
+      cronPreview.textContent = "cron: —";
+      cronPreview.classList.remove("error");
+      return;
+    }
+    try {
+      cronPreview.textContent = `cron: ${parseNaturalLanguage(value)}`;
+      cronPreview.classList.remove("error");
+    } catch (err: unknown) {
+      cronPreview.textContent =
+        err instanceof Error ? err.message : String(err);
+      cronPreview.classList.add("error");
+    }
+  });
+
+  root
+    .querySelector<HTMLButtonElement>("#form-cancel")
+    ?.addEventListener("click", () => {
+      paneMode = "view";
+      void rerender();
+    });
+
+  root
+    .querySelector<HTMLButtonElement>("#form-save")
+    ?.addEventListener("click", async () => {
+      const errorEl = root.querySelector<HTMLElement>("#form-error");
+      const setError = (msg: string) => {
+        if (!errorEl) return;
+        errorEl.textContent = msg;
+        errorEl.style.display = msg ? "block" : "none";
+      };
+      setError("");
+
+      const label = (
+        root.querySelector<HTMLInputElement>("#form-label")?.value ?? ""
+      ).trim();
+      const pageName = (
+        root.querySelector<HTMLInputElement>("#form-page-name")?.value ?? ""
+      ).trim();
+      const tagsRaw = (
+        root.querySelector<HTMLInputElement>("#form-tags")?.value ?? ""
+      ).trim();
+      const nl = (
+        root.querySelector<HTMLInputElement>("#form-nl")?.value ?? ""
+      ).trim();
+
+      if (!label || !pageName || !nl) {
+        setError("Label, page name, and schedule are required.");
+        return;
+      }
+
+      let cron: string;
+      try {
+        cron = parseNaturalLanguage(nl);
+      } catch (err: unknown) {
+        setError(
+          err instanceof Error ? err.message : "Could not parse schedule.",
+        );
+        return;
+      }
+
+      const tags = tagsRaw
+        .split(",")
+        .map((t) => t.trim().replace(/^#/, ""))
+        .filter(Boolean);
+
+      try {
+        const list = await loadSchedules();
+        let nextSelectedId = selectedId;
+
+        if (mode === "create") {
+          const entry: ScheduleEntry = {
+            id: `sch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            label,
+            pageName,
+            tags,
+            naturalLanguage: nl,
+            cron,
+            enabled: true,
+            createdAt: Date.now(),
+          };
+          list.push(entry);
+          nextSelectedId = entry.id;
+        } else {
+          const idx = list.findIndex((s) => s.id === selectedId);
+          if (idx === -1) {
+            setError("Schedule no longer exists.");
+            return;
+          }
+          list[idx] = {
+            ...list[idx],
+            label,
+            pageName,
+            tags,
+            naturalLanguage: nl,
+            cron,
+          };
+        }
+
+        await saveSchedules(list);
+        selectedId = nextSelectedId;
+        paneMode = "view";
+        await callbacks?.onChange();
+        await rerender();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[scheduler-ui] Failed to save schedule:", err);
+        setError(`Failed to save: ${message}`);
+      }
     });
 }
 
