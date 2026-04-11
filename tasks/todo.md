@@ -91,16 +91,15 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
       Done when: opening the dev build shows the new layout (with placeholder content); dark mode looks right.
       Est: 30 min
 
-- [ ] **5. UI state and re-render skeleton** — `src/ui.ts`
-      Module-level vars (`selectedId`, `searchQuery`, `activeTab`, `paneMode`). Refactor `renderPanel` to call helper render functions (`renderHeader`, `renderSidebar`, `renderDetail`). Add `restoreFocus()` helper that re-focuses the search input and restores cursor position if it had focus.
-      Done when: panel still renders today's content but with the new state plumbing in place (no visible change yet).
+- [x] **5. UI state, re-render skeleton, sidebar list with selection** — `src/ui.ts`
+      _Merged with task 6 — see Progress Log._ Module-level vars (`selectedId`, `searchQuery`, `activeTab`, `paneMode`, `cachedSchedules`, `callbacks`). Helper render functions (`renderHeader`, `renderSidebar`, `renderSchedItem`, `renderDetail`). Sidebar list with status pills and click-to-select. `captureFocus`/`restoreFocus` helpers for the search input. Detail pane has a placeholder for view mode.
+      Done when: clicking a schedule highlights it; basic shell renders. Done.
       Est: 20 min
 
 ### Phase 4 — Sidebar
 
-- [ ] **6. Sidebar list with status pills and summaries** — `src/ui.ts`
-      For each schedule: label, ON/OFF pill, one-line summary (cadence + relative next-fire). Selected item gets the accent border. Click selects (sets `selectedId`, `paneMode="view"`, re-renders).
-      Done when: clicking a schedule highlights it and changes the detail pane (still placeholder content in detail).
+- [x] **6. Sidebar list with status pills and summaries** — `src/ui.ts`
+      _Done as part of task 5 — see Progress Log._ Note: relative next-fire summary in `row2` is still TODO; today it shows the natural-language string. Will be filled in by task 15 (header stats) which adds the formatter wiring.
       Est: 20 min
 
 - [ ] **7. Search input** — `src/ui.ts`
@@ -185,3 +184,4 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 - 2026-04-11 — Task 2 done (RED): 25 tests written across `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`. Suite fails to load because `src/schedule-helpers.ts` doesn't exist.
 - 2026-04-11 — Task 3 done (GREEN): `src/schedule-helpers.ts` implemented with 4 pure functions. All 25 tests pass on first run, `tsc --noEmit` clean.
 - 2026-04-11 — Task 4 done: `index.html` `<style>` block fully replaced with Variant D layout (panel grid, header, sidebar, detail pane, next-fire card, config card, recent-runs styles, detail-form styles for create/edit, 680px responsive breakpoint, full dark-mode variants). `npm run typecheck` and `npm run build` both clean. Note: panel will render visually broken until task 5+ rewrites `ui.ts` rendering — old class names (`scheduler-panel`, `scheduler-row`, etc.) no longer have CSS. Intentional intermediate state.
+- 2026-04-11 — Tasks 5 + 6 done (merged): Realised on contact with implementation that pure "state vars only" couldn't ship without sidebar list rendering — the state plumbing is meaningless without something selectable. Combined into one logical change. New `src/ui.ts` has: module-level state (`selectedId`/`searchQuery`/`activeTab`/`paneMode`/`cachedSchedules`/`callbacks`), helper render functions (`renderHeader`/`renderSidebar`/`renderSchedItem`/`renderDetail`), sidebar list with click-to-select, detail-pane placeholder, `captureFocus`/`restoreFocus` for the search input, `has-selection` class on the panel for the responsive layout. Existing add/delete/run-now/force-run/toggle handlers removed — they come back in tasks 12 (recent runs needs nothing extra), 13 (create), 14 (edit), and partially in task 10 (view-mode actions). Bundle dropped 4kB. Typecheck/test/build all clean. Filter tabs / search input / +new button render in the DOM but don't have handlers yet — wired by tasks 7/8/9.

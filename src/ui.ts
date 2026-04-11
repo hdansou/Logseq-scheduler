@@ -1,6 +1,6 @@
-import { parseNaturalLanguage } from "./nl-cron";
-import { loadSchedules, saveSchedules } from "./storage";
+import { loadSchedules } from "./storage";
 import type { ScheduleEntry } from "./types";
+import type { FilterTab } from "./schedule-helpers";
 
 export interface PanelCallbacks {
   onChange: () => Promise<void> | void;
@@ -8,230 +8,213 @@ export interface PanelCallbacks {
   nextRunFor: (scheduleId: string) => Date | null;
 }
 
+type PaneMode = "view" | "edit" | "create";
+
+// Module-level UI state. Persists across re-renders so search input,
+// selection, and filter tab survive a full innerHTML rebuild.
+let selectedId: string | null = null;
+let searchQuery = "";
+let activeTab: FilterTab = "all";
+let paneMode: PaneMode = "view";
+let cachedSchedules: ScheduleEntry[] = [];
+let callbacks: PanelCallbacks | null = null;
+
 /**
- * Renders the schedule management panel into #app inside the plugin iframe.
- * Called when the user opens the main UI via toolbar button or command palette.
+ * Entry point invoked when the user opens the panel via toolbar or command
+ * palette. Loads schedules from storage, seeds initial selection, and
+ * triggers the first render.
  */
 export async function renderPanel(cb: PanelCallbacks): Promise<void> {
+  callbacks = cb;
+  cachedSchedules = await loadSchedules();
+
+  // Auto-select first schedule on open if nothing is selected yet.
+  if (!selectedId && cachedSchedules.length > 0 && paneMode === "view") {
+    selectedId = cachedSchedules[0].id;
+  }
+
+  await rerender();
+}
+
+/**
+ * Re-renders the entire panel from current state. Captures focus before
+ * tearing down the DOM and restores it afterward so typing in the search
+ * input doesn't lose focus on each keystroke.
+ */
+async function rerender(): Promise<void> {
   const root = document.getElementById("app");
-  if (!root) return;
+  if (!root || !callbacks) return;
 
-  const schedules = await loadSchedules();
-  root.innerHTML = panelHtml(schedules, cb.nextRunFor);
+  cachedSchedules = await loadSchedules();
 
-  const setFormError = (msg: string) => {
-    const el = root.querySelector<HTMLElement>("#form-error");
-    if (el) {
-      el.textContent = msg;
-      el.style.display = msg ? "block" : "none";
-    }
-  };
-
-  // Wire up handlers
-  const addBtn = root.querySelector<HTMLButtonElement>("#add-schedule");
-  console.log("[scheduler-ui] add-schedule button:", addBtn);
-  addBtn?.addEventListener("click", async () => {
-    console.log("[scheduler-ui] Add Schedule clicked");
-    setFormError("");
-    try {
-      const entry = readForm(root, setFormError);
-      if (!entry) return;
-      console.log("[scheduler-ui] adding entry:", entry);
-      const updated = [...(await loadSchedules()), entry];
-      await saveSchedules(updated);
-      await cb.onChange();
-      await renderPanel(cb);
-    } catch (err: any) {
-      console.error("[scheduler-ui] Failed to add schedule:", err);
-      setFormError(`Failed to add: ${err?.message ?? String(err)}`);
-    }
-  });
-
-  root.querySelector<HTMLInputElement>("#nl-input")?.addEventListener(
-    "input",
-    (e) => {
-      const input = (e.target as HTMLInputElement).value;
-      const cronOut = root.querySelector<HTMLElement>("#cron-preview");
-      if (!cronOut) return;
-      try {
-        cronOut.textContent = parseNaturalLanguage(input);
-        cronOut.classList.remove("error");
-      } catch (err: any) {
-        cronOut.textContent = err.message;
-        cronOut.classList.add("error");
-      }
-    },
-  );
-
-  root.querySelectorAll<HTMLButtonElement>(".delete-schedule").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      if (!id) return;
-      const list = (await loadSchedules()).filter((s) => s.id !== id);
-      await saveSchedules(list);
-      await cb.onChange();
-      await renderPanel(cb);
-    });
-  });
-
-  const attachRunHandler = (
-    selector: string,
-    force: boolean,
-    label: string,
-  ) => {
-    root.querySelectorAll<HTMLButtonElement>(selector).forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.id;
-        if (!id) return;
-        btn.disabled = true;
-        btn.textContent = "Running…";
-        try {
-          await cb.runNow(id, force);
-          btn.textContent = "Done ✓";
-          setTimeout(() => renderPanel(cb), 800);
-        } catch (err: any) {
-          console.error(`[scheduler-ui] ${label} failed:`, err);
-          btn.textContent = "Failed";
-          setFormError(`${label} failed: ${err?.message ?? String(err)}`);
-        } finally {
-          setTimeout(() => {
-            btn.disabled = false;
-          }, 800);
-        }
-      });
-    });
-  };
-  attachRunHandler(".run-now", false, "Run Now");
-  attachRunHandler(".force-run", true, "Force Run");
-
-  root.querySelectorAll<HTMLInputElement>(".toggle-enabled").forEach((chk) => {
-    chk.addEventListener("change", async () => {
-      const id = chk.dataset.id;
-      if (!id) return;
-      const list = await loadSchedules();
-      const item = list.find((s) => s.id === id);
-      if (!item) return;
-      item.enabled = chk.checked;
-      await saveSchedules(list);
-      await cb.onChange();
-      await renderPanel(cb);
-    });
-  });
-
-  root.querySelector<HTMLButtonElement>("#close-panel")?.addEventListener(
-    "click",
-    () => logseq.hideMainUI({ restoreEditingCursor: true }),
-  );
+  const focusInfo = captureFocus(root);
+  root.innerHTML = panelShell();
+  wireUp(root, callbacks);
+  restoreFocus(root, focusInfo);
 }
 
-function readForm(
-  root: HTMLElement,
-  setError: (msg: string) => void,
-): ScheduleEntry | null {
-  const label = (root.querySelector<HTMLInputElement>("#label")?.value ?? "").trim();
-  const pageName = (root.querySelector<HTMLInputElement>("#page-name")?.value ?? "").trim();
-  const tagsRaw = (root.querySelector<HTMLInputElement>("#tags")?.value ?? "").trim();
-  const nl = (root.querySelector<HTMLInputElement>("#nl-input")?.value ?? "").trim();
-
-  if (!label || !pageName || !nl) {
-    setError("Label, page name, and schedule are required.");
-    return null;
-  }
-
-  let cron: string;
-  try {
-    cron = parseNaturalLanguage(nl);
-  } catch (err: any) {
-    setError(err?.message ?? "Could not parse schedule.");
-    return null;
-  }
-
-  const tags = tagsRaw
-    .split(",")
-    .map((t) => t.trim().replace(/^#/, ""))
-    .filter(Boolean);
-
-  return {
-    id: `sch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    label,
-    pageName,
-    tags,
-    naturalLanguage: nl,
-    cron,
-    enabled: true,
-    createdAt: Date.now(),
-  };
-}
-
-function panelHtml(
-  schedules: ScheduleEntry[],
-  nextRunFor: (id: string) => Date | null,
-): string {
+function panelShell(): string {
+  // The has-selection class drives the responsive layout: at narrow widths
+  // it controls which pane is visible.
+  const hasSelection = (selectedId !== null) || paneMode === "create";
   return `
-    <div class="scheduler-panel">
-      <header class="scheduler-header">
+    <div class="panel${hasSelection ? " has-selection" : ""}">
+      ${renderHeader()}
+      <div class="panel-body">
+        ${renderSidebar()}
+        ${renderDetail()}
+      </div>
+    </div>
+  `;
+}
+
+function renderHeader(): string {
+  // Stats are added by a later task; header is title + close button only.
+  return `
+    <header class="panel-header">
+      <div class="panel-header-left">
         <h2>Scheduler</h2>
-        <button id="close-panel" class="scheduler-close">Close</button>
-      </header>
+      </div>
+      <button id="close-panel" class="close-btn" type="button">Close</button>
+    </header>
+  `;
+}
 
-      <section class="scheduler-form">
-        <h3>Add a Schedule</h3>
-        <label>Label <input id="label" placeholder="Personal Weekly Review" /></label>
-        <label>Page Name <input id="page-name" placeholder="Weekly Review" /></label>
-        <label>Tags (comma-separated) <input id="tags" placeholder="weekly-review, personal" /></label>
-        <label>
-          When
-          <input id="nl-input" placeholder="every Saturday at 11 AM" />
-          <small>Cron: <code id="cron-preview">—</code></small>
-        </label>
-        <div id="form-error" class="scheduler-form-error" style="display:none;"></div>
-        <button id="add-schedule" type="button">Add Schedule</button>
-      </section>
+function renderSidebar(): string {
+  // Search and filter-tabs are wired by later tasks; today they're decoration.
+  const items = cachedSchedules.length === 0
+    ? `<div class="sidebar-empty">No schedules yet</div>`
+    : cachedSchedules.map(renderSchedItem).join("");
 
-      <section class="scheduler-list">
-        <h3>Schedules (${schedules.length})</h3>
-        ${
-          schedules.length === 0
-            ? `<p class="scheduler-empty">No schedules yet.</p>`
-            : schedules.map((s) => scheduleRow(s, nextRunFor(s.id))).join("")
-        }
-      </section>
+  return `
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="search">
+          <input id="sidebar-search" type="text" placeholder="Search schedules…" value="${escapeHtml(searchQuery)}" />
+        </div>
+        <div class="filter-tabs">
+          <button data-tab="all" class="${activeTab === "all" ? "active" : ""}" type="button">All</button>
+          <button data-tab="active" class="${activeTab === "active" ? "active" : ""}" type="button">Active</button>
+          <button data-tab="paused" class="${activeTab === "paused" ? "active" : ""}" type="button">Paused</button>
+        </div>
+      </div>
+      <div class="sidebar-list">${items}</div>
+      <button id="new-schedule" class="new-btn" type="button">+ New schedule</button>
+    </aside>
+  `;
+}
+
+function renderSchedItem(s: ScheduleEntry): string {
+  const isSelected = s.id === selectedId;
+  return `
+    <div class="sched-item${isSelected ? " selected" : ""}" data-id="${escapeHtml(s.id)}">
+      <div class="row1">
+        <div class="label">${escapeHtml(s.label)}</div>
+        <div class="status ${s.enabled ? "on" : "off"}">${s.enabled ? "ON" : "OFF"}</div>
+      </div>
+      <div class="row2">${escapeHtml(s.naturalLanguage)}</div>
     </div>
   `;
 }
 
-function scheduleRow(s: ScheduleEntry, nextRun: Date | null): string {
-  const nextRunText = nextRun
-    ? `${nextRun.toLocaleString()}`
-    : s.enabled
-      ? "not scheduled"
-      : "disabled";
+function renderDetail(): string {
+  if (cachedSchedules.length === 0) {
+    return `
+      <main class="detail">
+        <div class="detail-empty">
+          <div class="empty-icon">⏰</div>
+          <div>No schedules yet.</div>
+          <div>Click <strong>+ New schedule</strong> to get started.</div>
+        </div>
+      </main>
+    `;
+  }
+
+  const selected = cachedSchedules.find((s) => s.id === selectedId);
+  if (!selected) {
+    return `
+      <main class="detail">
+        <div class="detail-empty">
+          <div>Select a schedule from the list.</div>
+        </div>
+      </main>
+    `;
+  }
+
+  // Placeholder for the rich view mode (title row, actions, next-fire card,
+  // configuration card, recent runs). Filled in by later tasks.
   return `
-    <div class="scheduler-row">
-      <div class="scheduler-row-main">
-        <strong>${escapeHtml(s.label)}</strong>
-        <div class="scheduler-row-sub">
-          ${escapeHtml(s.pageName)} · ${
-            s.tags.map((t) => `#${escapeHtml(t)}`).join(" ") || "<em>no tags</em>"
-          }
-        </div>
-        <div class="scheduler-row-sub">
-          <em>${escapeHtml(s.naturalLanguage)}</em> (<code>${escapeHtml(s.cron)}</code>)
-        </div>
-        <div class="scheduler-row-sub">
-          Next fire: <strong>${escapeHtml(nextRunText)}</strong>
+    <main class="detail">
+      <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
+      <div class="title-row">
+        <div>
+          <h3>${escapeHtml(selected.label)}</h3>
+          <div class="subtitle">${escapeHtml(selected.naturalLanguage)}</div>
         </div>
       </div>
-      <div class="scheduler-row-actions">
-        <label><input type="checkbox" class="toggle-enabled" data-id="${s.id}" ${
-          s.enabled ? "checked" : ""
-        } /> Enabled</label>
-        <button class="run-now" data-id="${s.id}" type="button" title="Create the page now (for testing)">Run Now</button>
-        <button class="force-run" data-id="${s.id}" type="button" title="Delete existing page and recreate">Force Run</button>
-        <button class="delete-schedule" data-id="${s.id}" type="button">Delete</button>
-      </div>
-    </div>
+    </main>
   `;
+}
+
+function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
+  root
+    .querySelector<HTMLButtonElement>("#close-panel")
+    ?.addEventListener("click", () => {
+      logseq.hideMainUI({ restoreEditingCursor: true });
+    });
+
+  root.querySelectorAll<HTMLElement>(".sched-item").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = el.dataset.id;
+      if (!id) return;
+      selectedId = id;
+      paneMode = "view";
+      void rerender();
+    });
+  });
+
+  root
+    .querySelector<HTMLButtonElement>("#back-to-list")
+    ?.addEventListener("click", () => {
+      selectedId = null;
+      void rerender();
+    });
+}
+
+interface FocusInfo {
+  selector: string | null;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+}
+
+function captureFocus(root: HTMLElement): FocusInfo {
+  const active = document.activeElement as HTMLElement | null;
+  if (!active || !root.contains(active)) {
+    return { selector: null, selectionStart: null, selectionEnd: null };
+  }
+  if (active.id === "sidebar-search") {
+    const input = active as HTMLInputElement;
+    return {
+      selector: "#sidebar-search",
+      selectionStart: input.selectionStart,
+      selectionEnd: input.selectionEnd,
+    };
+  }
+  return { selector: null, selectionStart: null, selectionEnd: null };
+}
+
+function restoreFocus(root: HTMLElement, info: FocusInfo): void {
+  if (!info.selector) return;
+  const el = root.querySelector<HTMLInputElement>(info.selector);
+  if (!el) return;
+  el.focus();
+  if (info.selectionStart !== null && info.selectionEnd !== null) {
+    try {
+      el.setSelectionRange(info.selectionStart, info.selectionEnd);
+    } catch {
+      // Some input types don't support selection ranges; ignore.
+    }
+  }
 }
 
 function escapeHtml(str: string): string {
