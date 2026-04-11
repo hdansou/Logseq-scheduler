@@ -61,7 +61,7 @@ async function rerender(): Promise<void> {
 
   const focusInfo = captureFocus(root);
   root.innerHTML = panelShell();
-  wireUp(root, callbacks);
+  wireUp(root);
   restoreFocus(root, focusInfo);
 }
 
@@ -146,7 +146,7 @@ function renderSidebar(): string {
     <aside class="sidebar">
       <div class="sidebar-top">
         <div class="search">
-          <input id="sidebar-search" type="text" placeholder="Search schedules…" value="${escapeHtml(searchQuery)}" />
+          <input id="sidebar-search" type="text" placeholder="Search schedules…" aria-label="Search schedules" value="${escapeHtml(searchQuery)}" />
         </div>
         <div class="filter-tabs">
           <button data-tab="all" class="${activeTab === "all" ? "active" : ""}" type="button">All (${totalCount})</button>
@@ -163,13 +163,13 @@ function renderSidebar(): string {
 function renderSchedItem(s: ScheduleEntry): string {
   const isSelected = s.id === selectedId;
   return `
-    <div class="sched-item${isSelected ? " selected" : ""}" data-id="${escapeHtml(s.id)}">
+    <button type="button" class="sched-item${isSelected ? " selected" : ""}" data-id="${escapeHtml(s.id)}" aria-pressed="${isSelected}">
       <div class="row1">
         <div class="label">${escapeHtml(s.label)}</div>
-        <div class="status ${s.enabled ? "on" : "off"}">${s.enabled ? "ON" : "OFF"}</div>
+        <div class="status ${s.enabled ? "on" : "off"}" aria-label="${s.enabled ? "Active" : "Paused"}">${s.enabled ? "ON" : "OFF"}</div>
       </div>
       <div class="row2">${escapeHtml(s.naturalLanguage)}</div>
-    </div>
+    </button>
   `;
 }
 
@@ -273,7 +273,7 @@ function renderScheduleForm(initial: ScheduleEntry | null): string {
     <main class="detail">
       <button class="back-btn" id="back-to-list" type="button">← Schedules</button>
       <h3>${escapeHtml(title)}</h3>
-      <div class="detail-form">
+      <form class="detail-form" id="schedule-form">
         <label>Label
           <input id="form-label" type="text" value="${escapeHtml(label)}" placeholder="Personal Weekly Review" />
         </label>
@@ -290,9 +290,9 @@ function renderScheduleForm(initial: ScheduleEntry | null): string {
         <div class="form-error" id="form-error" style="display:none;"></div>
         <div class="form-actions">
           <button type="button" class="btn" id="form-cancel">Cancel</button>
-          <button type="button" class="btn btn-primary" id="form-save">Save</button>
+          <button type="submit" class="btn btn-primary" id="form-save">Save</button>
         </div>
-      </div>
+      </form>
     </main>
   `;
 }
@@ -336,14 +336,14 @@ function renderConfigCard(s: ScheduleEntry): string {
   `;
 }
 
-function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
+function wireUp(root: HTMLElement): void {
   root
     .querySelector<HTMLButtonElement>("#close-panel")
     ?.addEventListener("click", () => {
       logseq.hideMainUI({ restoreEditingCursor: true });
     });
 
-  root.querySelectorAll<HTMLElement>(".sched-item").forEach((el) => {
+  root.querySelectorAll<HTMLButtonElement>(".sched-item").forEach((el) => {
     el.addEventListener("click", () => {
       const id = el.dataset.id;
       if (!id) return;
@@ -395,13 +395,17 @@ function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.id;
         if (!id) return;
-        const list = await loadSchedules();
-        const item = list.find((s) => s.id === id);
-        if (!item) return;
-        item.enabled = !item.enabled;
-        await saveSchedules(list);
-        await callbacks?.onChange();
-        await rerender();
+        try {
+          const list = await loadSchedules();
+          const item = list.find((s) => s.id === id);
+          if (!item) return;
+          item.enabled = !item.enabled;
+          await saveSchedules(list);
+          await callbacks?.onChange();
+          await rerender();
+        } catch (err: unknown) {
+          console.error("[scheduler-ui] Failed to toggle schedule:", err);
+        }
       });
     });
 
@@ -423,13 +427,17 @@ function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.id;
         if (!id) return;
-        const list = (await loadSchedules()).filter((s) => s.id !== id);
-        await saveSchedules(list);
-        if (selectedId === id) {
-          selectedId = list[0]?.id ?? null;
+        try {
+          const list = (await loadSchedules()).filter((s) => s.id !== id);
+          await saveSchedules(list);
+          if (selectedId === id) {
+            selectedId = list[0]?.id ?? null;
+          }
+          await callbacks?.onChange();
+          await rerender();
+        } catch (err: unknown) {
+          console.error("[scheduler-ui] Failed to delete schedule:", err);
         }
-        await callbacks?.onChange();
-        await rerender();
       });
     });
 
@@ -471,8 +479,9 @@ function wireUpScheduleForm(
     });
 
   root
-    .querySelector<HTMLButtonElement>("#form-save")
-    ?.addEventListener("click", async () => {
+    .querySelector<HTMLFormElement>("#schedule-form")
+    ?.addEventListener("submit", async (event) => {
+      event.preventDefault();
       const errorEl = root.querySelector<HTMLElement>("#form-error");
       const setError = (msg: string) => {
         if (!errorEl) return;
@@ -575,20 +584,18 @@ function attachRunHandler(
       try {
         await callbacks.runNow(id, force);
         btn.textContent = "Done ✓";
-        setTimeout(() => {
-          void rerender();
-        }, 600);
+        // Rerender will replace the button entirely; no further cleanup needed.
+        setTimeout(() => void rerender(), 600);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[scheduler-ui] ${selector} failed:`, err);
         btn.textContent = "Failed";
         btn.title = message;
-      } finally {
+        // Failure path: restore the button in place so the user can retry
+        // without losing context.
         setTimeout(() => {
           btn.disabled = false;
-          if (btn.textContent === "Running…" || btn.textContent === "Failed") {
-            btn.textContent = originalText;
-          }
+          btn.textContent = originalText;
         }, 1500);
       }
     });
@@ -636,5 +643,6 @@ function escapeHtml(str: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

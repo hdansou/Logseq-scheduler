@@ -178,12 +178,23 @@
         min-height: 180px;
       }
       .sched-item {
+        display: block;
+        width: 100%;
         padding: 10px 14px;
+        border: none;
         border-bottom: 1px solid var(--border);
+        background: transparent;
+        text-align: left;
+        font: inherit;
+        color: inherit;
         cursor: pointer;
         position: relative;
       }
       .sched-item:hover { background: var(--hover); }
+      .sched-item:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
       .sched-item.selected {
         background: #fff;
         border-left: 3px solid var(--accent);
