@@ -102,12 +102,12 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
       _Done as part of task 5 — see Progress Log._ Note: relative next-fire summary in `row2` is still TODO; today it shows the natural-language string. Will be filled in by task 15 (header stats) which adds the formatter wiring.
       Est: 20 min
 
-- [ ] **7. Search input** — `src/ui.ts`
+- [x] **7. Search input** — `src/ui.ts`
       Search box at top of sidebar. `onInput` updates `searchQuery` and re-renders. After re-render, `restoreFocus()` keeps focus and cursor position. Sidebar list filters via `searchSchedules`.
       Done when: typing filters the list without losing focus or cursor position.
       Est: 15 min
 
-- [ ] **8. Filter tabs** — `src/ui.ts`
+- [x] **8. Filter tabs** — `src/ui.ts`
       Three buttons: All (n) / Active (n) / Paused (n). Counts come from the unfiltered list. Click sets `activeTab` and re-renders. Sidebar list filters via `filterSchedules`.
       Done when: tabs filter correctly; counts always reflect totals, not filtered totals.
       Est: 15 min
@@ -184,4 +184,5 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 - 2026-04-11 — Task 2 done (RED): 25 tests written across `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`. Suite fails to load because `src/schedule-helpers.ts` doesn't exist.
 - 2026-04-11 — Task 3 done (GREEN): `src/schedule-helpers.ts` implemented with 4 pure functions. All 25 tests pass on first run, `tsc --noEmit` clean.
 - 2026-04-11 — Task 4 done: `index.html` `<style>` block fully replaced with Variant D layout (panel grid, header, sidebar, detail pane, next-fire card, config card, recent-runs styles, detail-form styles for create/edit, 680px responsive breakpoint, full dark-mode variants). `npm run typecheck` and `npm run build` both clean. Note: panel will render visually broken until task 5+ rewrites `ui.ts` rendering — old class names (`scheduler-panel`, `scheduler-row`, etc.) no longer have CSS. Intentional intermediate state.
+- 2026-04-11 — Tasks 7 + 8 done: Search input wired with `onInput → searchQuery → rerender → restoreFocus`. Filter tabs wired with click handler that sets `activeTab`. Tab counts always show totals (not filtered totals). Sidebar list now uses `searchSchedules(filterSchedules(cachedSchedules, activeTab), searchQuery)`. New "No schedules match" empty state for when filtering produces no results.
 - 2026-04-11 — Tasks 5 + 6 done (merged): Realised on contact with implementation that pure "state vars only" couldn't ship without sidebar list rendering — the state plumbing is meaningless without something selectable. Combined into one logical change. New `src/ui.ts` has: module-level state (`selectedId`/`searchQuery`/`activeTab`/`paneMode`/`cachedSchedules`/`callbacks`), helper render functions (`renderHeader`/`renderSidebar`/`renderSchedItem`/`renderDetail`), sidebar list with click-to-select, detail-pane placeholder, `captureFocus`/`restoreFocus` for the search input, `has-selection` class on the panel for the responsive layout. Existing add/delete/run-now/force-run/toggle handlers removed — they come back in tasks 12 (recent runs needs nothing extra), 13 (create), 14 (edit), and partially in task 10 (view-mode actions). Bundle dropped 4kB. Typecheck/test/build all clean. Filter tabs / search input / +new button render in the DOM but don't have handlers yet — wired by tasks 7/8/9.

@@ -1,6 +1,10 @@
 import { loadSchedules } from "./storage";
 import type { ScheduleEntry } from "./types";
-import type { FilterTab } from "./schedule-helpers";
+import {
+  filterSchedules,
+  searchSchedules,
+  type FilterTab,
+} from "./schedule-helpers";
 
 export interface PanelCallbacks {
   onChange: () => Promise<void> | void;
@@ -81,10 +85,24 @@ function renderHeader(): string {
 }
 
 function renderSidebar(): string {
-  // Search and filter-tabs are wired by later tasks; today they're decoration.
-  const items = cachedSchedules.length === 0
-    ? `<div class="sidebar-empty">No schedules yet</div>`
-    : cachedSchedules.map(renderSchedItem).join("");
+  // Tab counts always reflect totals, never the current search.
+  const totalCount = cachedSchedules.length;
+  const activeCount = cachedSchedules.filter((s) => s.enabled).length;
+  const pausedCount = totalCount - activeCount;
+
+  const visible = searchSchedules(
+    filterSchedules(cachedSchedules, activeTab),
+    searchQuery,
+  );
+
+  let items: string;
+  if (totalCount === 0) {
+    items = `<div class="sidebar-empty">No schedules yet</div>`;
+  } else if (visible.length === 0) {
+    items = `<div class="sidebar-empty">No schedules match</div>`;
+  } else {
+    items = visible.map(renderSchedItem).join("");
+  }
 
   return `
     <aside class="sidebar">
@@ -93,9 +111,9 @@ function renderSidebar(): string {
           <input id="sidebar-search" type="text" placeholder="Search schedules…" value="${escapeHtml(searchQuery)}" />
         </div>
         <div class="filter-tabs">
-          <button data-tab="all" class="${activeTab === "all" ? "active" : ""}" type="button">All</button>
-          <button data-tab="active" class="${activeTab === "active" ? "active" : ""}" type="button">Active</button>
-          <button data-tab="paused" class="${activeTab === "paused" ? "active" : ""}" type="button">Paused</button>
+          <button data-tab="all" class="${activeTab === "all" ? "active" : ""}" type="button">All (${totalCount})</button>
+          <button data-tab="active" class="${activeTab === "active" ? "active" : ""}" type="button">Active (${activeCount})</button>
+          <button data-tab="paused" class="${activeTab === "paused" ? "active" : ""}" type="button">Paused (${pausedCount})</button>
         </div>
       </div>
       <div class="sidebar-list">${items}</div>
@@ -178,6 +196,23 @@ function wireUp(root: HTMLElement, _cb: PanelCallbacks): void {
     ?.addEventListener("click", () => {
       selectedId = null;
       void rerender();
+    });
+
+  const searchInput = root.querySelector<HTMLInputElement>("#sidebar-search");
+  searchInput?.addEventListener("input", () => {
+    searchQuery = searchInput.value;
+    void rerender();
+  });
+
+  root
+    .querySelectorAll<HTMLButtonElement>(".filter-tabs button")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab as FilterTab | undefined;
+        if (!tab) return;
+        activeTab = tab;
+        void rerender();
+      });
     });
 }
 
