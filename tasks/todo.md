@@ -74,12 +74,12 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 
 ### Phase 2 — Pure helpers (test-first)
 
-- [ ] **2. [RED] Tests for schedule helpers** — `src/__tests__/schedule-helpers.test.ts`
+- [x] **2. [RED] Tests for schedule helpers** — `src/__tests__/schedule-helpers.test.ts`
       Cases: filter by tab (all/active/paused); search by label (case-insensitive, partial, empty query returns all); stats (active count, paused count, soonest next-fire across enabled schedules with mixed nulls); countdown formatter (just-now / minutes / hours / days / "tomorrow" / past / null).
       Done when: tests exist, all FAIL.
       Est: 25 min
 
-- [ ] **3. [GREEN] Implement schedule helpers** — `src/schedule-helpers.ts`
+- [x] **3. [GREEN] Implement schedule helpers** — `src/schedule-helpers.ts`
       Pure functions: `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`. No DOM, no logseq, no side effects.
       Done when: all tests from task 2 pass; `tsc --noEmit` clean.
       Est: 25 min
@@ -182,3 +182,5 @@ Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them p
 
 <!-- Updated as tasks complete -->
 - 2026-04-11 — Task 1 done: Vitest 2.1.9 installed, `npm test` reports "No test files found" as expected. Exit code 1 will flip to 0 once task 2 adds the first test file.
+- 2026-04-11 — Task 2 done (RED): 25 tests written across `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`. Suite fails to load because `src/schedule-helpers.ts` doesn't exist.
+- 2026-04-11 — Task 3 done (GREEN): `src/schedule-helpers.ts` implemented with 4 pure functions. All 25 tests pass on first run, `tsc --noEmit` clean.
