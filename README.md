@@ -21,6 +21,7 @@ Cron-based page creation for Logseq DB graphs. Define named schedules in plain E
 - **Tags as page classes** — each tag is resolved (or created) via `createTag` and attached to the new page with `addBlockTag`, so Logseq's tag-template rendering fires automatically.
 - **Polling engine** — the scheduler polls every 30 seconds and also listens to `DB.onChanged` as a wake-up, so firings are reliable even when the plugin iframe is hidden.
 - **Missed-run catch-up** — on startup, each schedule's most recent expected firing (since the later of its last run or its creation time) is fired once. Schedules never backfill pages for cron times before they were created.
+- **Graph-scoped schedules** — each schedule targets specific graphs by name (comma-separated), or `all` to run on every graph. New schedules default to the current graph. When you switch graphs, the engine restarts and only fires schedules that target the active graph. Schedules for other graphs are skipped with a `skipped-wrong-graph` entry in the fire log.
 - **Run Now / Force Run** — fire a schedule on demand; Force Run deletes an existing page for the current period and recreates it.
 
 ### Manager UI
@@ -67,6 +68,7 @@ Click the ⏰ icon in the Logseq toolbar, or run **Scheduler: Open panel** from 
    - **Label** — human-friendly name (e.g., `Personal Weekly Review`).
    - **Page name** — prefix; the date suffix is appended automatically based on the detected frequency.
    - **Tags** — comma-separated. Each tag is created if it doesn't already exist.
+   - **Graphs** — comma-separated graph names this schedule should run on, or `all` for every graph. Defaults to the current graph's name.
    - **When** — natural language. The computed cron expression updates beneath the field as you type.
 3. Press <kbd>Enter</kbd> or click **Save**. The new schedule appears in the sidebar, is selected automatically, and the detail pane switches to its view mode.
 
@@ -123,14 +125,17 @@ Schedules, last-run timestamps, and fire-history entries are persisted in `logse
 
 1. The engine polls every 30 seconds and walks each enabled schedule.
 2. For each schedule it computes the most recent expected cron time prior to `now`, using `max(lastRun, createdAt)` as the floor.
-3. If that time is more recent than the recorded `lastRun`, the schedule fires: the target page name is built (prefix + date suffix), the page is looked up via a strict Datascript query (`:logseq.class/Page` membership), created if missing, then each tag is resolved (or created) and attached via `addBlockTag`.
-4. The `lastRun` timestamp and a fire-log entry are written back to settings.
+3. If a fire is due, the engine checks whether the schedule targets the current graph (via its `graphNames` field). Schedules that don't match are logged as `skipped-wrong-graph` and skipped.
+4. If the graph matches, the schedule fires: the target page name is built (prefix + date suffix), the page is looked up via a strict Datascript query (`:logseq.class/Page` membership), created if missing, then each tag is resolved (or created) and attached via `addBlockTag`.
+5. The `lastRun` timestamp and a fire-log entry are written back to settings.
 
 ## Troubleshooting
 
 - **Nothing fires** — open the browser console and filter for `[scheduler]`. You should see a heartbeat log every 60 seconds and `(poll)` lines on each walk.
 - **Schedule fires twice for the same period** — shouldn't happen; the duplicate-page check and `lastRun` guard both prevent it. Report with the fire-log entries.
 - **Tag appears as a child block instead of on the page header** — this is the old behaviour and has been removed. Ensure you're on the latest build; tags are now attached via `addBlockTag` only.
+- **Schedule doesn't fire after switching graphs** — the schedule's **Graphs** field may not include the current graph name. Check the configuration card in the detail pane for the graph badge. Edit the schedule and add the graph name, or set it to `all`.
+- **Fire log shows `skipped-wrong-graph`** — expected when the active graph doesn't match the schedule's target. Switch to the correct graph or update the schedule's Graphs field.
 - **`startupDelaySeconds` setting** — historical no-op kept for backwards compatibility. Will be removed in a future release.
 
 ## License

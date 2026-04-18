@@ -34,6 +34,12 @@ let schedulesCache: ScheduleEntry[] | null = null;
 let lastRunsCache: LastRunMap | null = null;
 let fireLogCache: FireLogEntry[] | null = null;
 
+export function resetCaches(): void {
+  schedulesCache = null;
+  lastRunsCache = null;
+  fireLogCache = null;
+}
+
 export async function loadSchedules(): Promise<ScheduleEntry[]> {
   if (schedulesCache !== null) return schedulesCache;
   try {

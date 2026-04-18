@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Graph-scoped schedules.** Each schedule now carries a `graphNames` field (comma-separated graph names, or `"all"`). New schedules default to the current graph's name. The engine skips schedules that don't target the active graph, logging `skipped-wrong-graph` to the fire log. On graph switch, storage caches are flushed and the engine restarts with the new graph context. Existing schedules without the field are treated as `"all"` (runs on every graph), preserving current behavior.
+- **Graph badges in the UI.** Sidebar schedule items and the detail-pane configuration card show the target graph(s) as a badge. The create/edit form includes a "Graphs" text field defaulting to the current graph name.
 - **Two-pane schedule manager UI.** Replaces the single-pane stacked-form layout with a sidebar list + detail pane, built from the approved Variant D mockup in `mockups/variant-d-refined.html`. Sidebar has search, All/Active/Paused filter tabs with counts, schedule items with ON/OFF pills, and a "+ New schedule" button at the bottom. Detail pane renders the selected schedule's full configuration, a live next-fire countdown, and recent runs — or the create/edit form when adding or modifying a schedule.
 - **Edit existing schedules.** The detail pane's Edit button reuses the create form pre-filled; saving replaces the schedule in place while preserving `id` and `createdAt`. Previously the only way to change a schedule was to delete and re-add it.
 - **Search schedules** by label (case-insensitive, partial match) directly from the sidebar. Input focus and cursor position are preserved across re-renders.
@@ -16,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Recent runs card** in the detail pane: last 10 fire-log entries for the selected schedule, each with a relative time, a source pill (`cron` / `manual` / `force` / `catch-up`), and a colour-coded outcome badge (`created` / `exists` / `skipped` / `error`). Error messages surface as row tooltips.
 - **Responsive layout at 680px.** Below the breakpoint the panes stack, a "← Schedules" back button appears on the detail pane, and the third header stat hides to prevent wrapping.
 - **Keyboard accessibility.** Sidebar items are real `<button>` elements with `aria-pressed` and a focus-visible outline. Search input has an `aria-label`. The create/edit form is a real `<form>` so Enter submits from any field. Pressing <kbd>Esc</kbd> closes the panel; when in create/edit mode the first <kbd>Esc</kbd> cancels the form back to view mode, so a second press is needed to close (matches the Cancel button semantics and protects against accidentally losing form input).
-- **Vitest unit-test suite** for pure helpers (`src/schedule-helpers.ts`, 33 tests covering `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`, `formatPast`). New `npm test` script.
+- **Vitest unit-test suite** for pure helpers (`src/schedule-helpers.ts`, 44 tests covering `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`, `formatPast`, `isScheduleForGraph`). New `npm test` script.
 - **Plugin `icon.png`** (128×128) so the plugin can be loaded in production.
 - **`README.md`** with installation, usage, supported phrases, settings, and troubleshooting.
 - **`CHANGELOG.md`** tracking notable changes.

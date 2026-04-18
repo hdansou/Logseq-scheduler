@@ -18,6 +18,8 @@ A Logseq DB plugin that creates pages on cron-based schedules, automatically app
 10. As a user, I want to see recent fire history per schedule so I can diagnose missed or skipped runs.
 11. As a user, I want the plugin panel to follow Logseq's light/dark theme so it doesn't look foreign when I switch themes.
 12. As a user, I want the panel to remain usable when the Logseq window is narrow, not only on wide screens.
+13. As a user, I want each schedule to target specific graphs so the engine doesn't create pages in the wrong graph when I switch between DB graphs.
+14. As a user, I want to assign a schedule to multiple graphs (or all graphs) so I can reuse a schedule across contexts without duplicating it.
 
 ## Features
 
@@ -55,7 +57,19 @@ live in `tasks/todo.md`; reference mockup at `mockups/variant-d-refined.html`.
 - [x] **Responsive layout at 680px** — panes stack, "← Schedules" back button appears on detail, third header stat hides
 - [x] **Follows Logseq's theme** — reads `logseq.App.getUserConfigs` on load and subscribes to `logseq.App.onThemeModeChanged`; CSS uses `html.dark` selectors instead of `prefers-color-scheme`
 - [x] **Keyboard accessibility** — sidebar items are real `<button>` elements with `aria-pressed` and focus-visible outline; search input has `aria-label`; Esc closes the panel (two-step in create/edit mode: first Esc cancels the form, second closes)
-- [x] **Unit tests** — Vitest suite for the pure helpers in `src/schedule-helpers.ts` (33 tests)
+- [x] **Unit tests** — Vitest suite for the pure helpers in `src/schedule-helpers.ts` (44 tests)
+
+### Graph-scoped schedules (shipped 2026-04-11)
+Schedules were stored globally per-plugin via `logseq.settings`, not per-graph.
+Switching between DB graphs caused the engine to create pages in the wrong graph.
+
+- [x] **`graphNames` field on `ScheduleEntry`** — comma-separated graph names, or `"all"`. New schedules default to the current graph's name. Legacy schedules (missing the field) are treated as `"all"`, preserving existing behavior with no migration.
+- [x] **Graph-aware engine** — `SchedulerEngine` receives the current graph name at start. On each poll, if a fire is due, the engine checks `isScheduleForGraph(schedule, currentGraphName)` before firing. Non-matching schedules get a `skipped-wrong-graph` fire log entry and their `lastRun` is recorded so the skip isn't re-logged on subsequent polls.
+- [x] **Graph switch handling** — `logseq.App.onCurrentGraphChanged` flushes storage caches (stale data from the prior graph's session) via `resetCaches()` and restarts the engine with the new graph name.
+- [x] **Graphs field in the form** — text input between Tags and When; defaults to current graph name for new schedules, shows existing value for edits. Accepts comma-separated names or `all`.
+- [x] **Graph badges in sidebar and config card** — indigo badge for named graphs, grey italic for "all". Visible on every schedule regardless of current graph.
+- [x] **`skipped-wrong-graph` fire outcome** — distinct from `"skipped"` (DB-graph check) with its own badge colour in the fire log.
+- [x] **Cross-graph visibility** — all schedules are shown in the UI regardless of the current graph, each labelled with its target graph(s).
 
 ## Technical Approach
 
@@ -66,11 +80,13 @@ live in `tasks/todo.md`; reference mockup at `mockups/variant-d-refined.html`.
   - `logseq.useSettingsSchema` for global config (timezone)
   - `logseq.settings` for the schedule list, last-run timestamps, and fire log (originally planned as `logseq.FileStorage` but the local Logseq build threw "failed to get fs backend")
   - In-memory authoritative cache in `src/storage.ts` because `logseq.updateSettings` is fire-and-forget IPC and the local `logseq.settings` getter doesn't reflect writes synchronously
+  - `resetCaches()` flushes the in-memory cache on graph switch so stale data from the prior graph doesn't persist
 - **Natural language parsing**: Simple in-house parser covering common patterns (every {day}, every day, every month on {nth}, etc.) — not a full NLP system
 - **Tag application**: `logseq.Editor.createPage` → `resolveTag` (getTag → getTagsByName → fuzzy match → createTag) → `logseq.Editor.addBlockTag` for each tag so the tag attaches to the *page*, not a child block
 - **Frequency detection**: Inspect the cron expression fields (minute/hour/dow/dom/month) to classify
 - **Page existence check**: `findPageByTitle` runs a strict Datascript query requiring `:logseq.class/Page` membership, because `logseq.Editor.getPage` returns stale / non-page entities
 - **UI**: Plain TypeScript + DOM, no framework. Two-pane layout with full-innerHTML re-rendering driven by module-level state vars (`selectedId`, `searchQuery`, `activeTab`, `paneMode`); `captureFocus`/`restoreFocus` preserve search input focus across re-renders. Theme follows Logseq via `logseq.App.onThemeModeChanged`.
+- **Graph scoping**: Each `ScheduleEntry` carries an optional `graphNames` field (comma-separated names or `"all"`). `isScheduleForGraph(entry, graphName)` in `schedule-helpers.ts` handles matching (case-insensitive, whitespace-trimmed, missing/empty = "all"). `logseq.App.getCurrentGraph()` provides the graph name at startup; `logseq.App.onCurrentGraphChanged` triggers cache flush + engine restart on switch. Matching on graph name (not path) for portability across machines.
 - **Testing**: Vitest for pure helpers (`src/schedule-helpers.ts`); no DOM tests — UI is validated manually via the `logseq-plugin-tester` skill
 - **DB graph only**: Tags-as-classes is a DB-graph concept; guard with `checkCurrentIsDbGraph`
 
@@ -82,7 +98,6 @@ live in `tasks/todo.md`; reference mockup at `mockups/variant-d-refined.html`.
 - In-plugin page content templating (tags drive template rendering via Logseq)
 - Per-schedule timezone overrides
 - File graph support
-- Schedule import/export
 - Notifications when a schedule fires
 - Drag-to-reorder schedules
 - Bulk actions on multiple schedules

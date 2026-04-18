@@ -1,195 +1,104 @@
-# Scheduler UI Redesign — Two-Pane Manager
+## Task List: Graph-Scoped Schedules
 
-**Spec:** below
-**Prototype:** `mockups/variant-d-refined.html`
-**Started:** 2026-04-11
-**Status:** done
+Started: 2026-04-11
+Status: done
 
----
+### Spec
 
-## Spec
+#### Goal
+Schedules are bound to specific graphs so the engine never creates pages in the wrong graph when the user switches between DB graphs.
 
-### Goal
-Replace the current single-pane stacked-form scheduler UI with a two-pane manager (sidebar list + detail pane) that scales as more schedules are added and surfaces edit and run-history capabilities.
+#### Users
+Logseq users with multiple DB graphs who keep the scheduler plugin active across graph switches.
 
-### Users
-Single-user Logseq plugin. The user opens the panel via the ⏰ toolbar button or the "Scheduler: Open panel" command. Primary jobs to be done:
-- See at a glance which schedules are active and when the next one fires
-- Add, edit, pause/resume, delete a schedule
-- Manually trigger a schedule (Run Now or Force Run)
-- Inspect recent run history for debugging missed or skipped fires
+#### Constraints
+- Must: each schedule carries a `graphNames` field (comma-separated graph names, or `"all"`)
+- Must: engine skips schedules whose `graphNames` don't include the current graph, logging `"skipped-wrong-graph"` to the fire log and `continue`-ing
+- Must: existing schedules (no `graphNames` field) default to `"all"` — preserves current behavior
+- Must: UI shows all schedules regardless of current graph, with a graph label on each
+- Must: form includes a "Graphs" text input (comma-separated names, or `all`)
+- Must: new schedules default to the current graph name
+- Must not: break existing storage schema — new field tolerates missing values on load
+- Must not: grow `src/ui.ts` beyond ~660 lines (CLAUDE.md constraint)
 
-### Constraints
-- **Must:** preserve all current behavior of add/delete/toggle/run-now/force-run; storage format unchanged; engine and callbacks unchanged
-- **Must:** light and dark mode both look right
-- **Must:** responsive at panel widths down to ~360px
-- **Must not:** introduce a UI framework (no React/Preact/lit-html); plain TS + DOM only
-- **Must not:** change the scheduler/storage/engine layer beyond what's needed for new features
+#### Design Decisions
+- **Single pool storage** — one `_schedulesJson` array, filtered at runtime by `graphNames`. Multi-graph schedules and cross-graph visibility make partitioned storage impractical.
+- **Match on graph name, not path** — human-readable, portable across machines, what the user types. `logseq.App.getCurrentGraph()` returns `{ name, path }`; we use `name`.
+- **`"all"` keyword** — explicit string in the text field. Unambiguous intent. Empty/missing field on legacy schedules also treated as "all".
+- **Legacy default is `"all"`** — existing schedules without `graphNames` run everywhere, matching pre-change behavior. Users opt into graph scoping at their own pace.
+- **`logseq.App.onCurrentGraphChanged`** — on graph switch, flush storage caches (stale data from prior graph) and restart the engine with the new graph name.
+- **Fire log outcome `"skipped-wrong-graph"`** — distinct from `"skipped"` (which means DB-graph check failed). Logged so the user can see when schedules are missed due to graph mismatch.
 
-### Design Decisions
+#### Data Model Change
+```typescript
+interface ScheduleEntry {
+  // ... existing fields ...
+  /** Comma-separated graph names this schedule targets, or "all". */
+  graphNames: string;
+}
 
-1. **Run history is in scope.** `appendFireLog` already persists the last 50 fire events to `logseq.settings._fireLogJson`. Surfacing it is render-only.
-2. **Edit reuses the new-schedule form.** Edit button on a schedule opens the same form as create, pre-filled. Saving replaces the existing entry (same id, same createdAt). One form to maintain.
-3. **Auto-select first schedule on open.** When the panel opens with at least one schedule, the first item is selected. Zero-schedules state shows a placeholder pointing at "+ New schedule."
-4. **Full re-render with module-level state.** Keep the `renderPanel` pattern. Module-level vars: `selectedId`, `searchQuery`, `activeTab`, `paneMode`. After re-render, restore search input value and focus.
-5. **New-schedule form lives in the detail pane.** Three pane modes: `view`, `edit`, `create`. No modal overlay.
-6. **Test pure helpers only with Vitest.** Filter, search, stats, countdown formatter. No DOM tests, no jsdom.
-
-### Data Model
-No changes to `ScheduleEntry`, `FireLogEntry`, or storage shape. New module-level UI state in `ui.ts`:
-
-```ts
-type PaneMode = "view" | "edit" | "create";
-type FilterTab = "all" | "active" | "paused";
-
-let selectedId: string | null = null;
-let searchQuery = "";
-let activeTab: FilterTab = "all";
-let paneMode: PaneMode = "view";
+type FireOutcome = "created" | "exists" | "skipped" | "skipped-wrong-graph" | "error";
 ```
 
-### Out of Scope (v1)
-- Per-schedule timezone overrides
-- Schedule import/export
-- Notifications when a schedule fires
-- Keyboard shortcuts (Esc to cancel, etc.)
-- Drag-to-reorder, bulk actions
-- Direct cron expression editing (natural-language only)
+Runtime helper `isScheduleForGraph(schedule, currentGraphName)`:
+- Returns `true` if `graphNames` is `"all"`, empty, undefined (legacy), or if the comma-split-and-trimmed list includes `currentGraphName` (case-insensitive).
 
-### Open Questions
-None at planning time. Add here if any surface during implementation.
+#### Out of Scope (v1)
+- Backup / restore (export/import) — tracked in `tasks.md` deferred section
+- Auto-discovery of available graph names (user types them manually)
+- Per-graph storage partitioning
 
 ---
 
-## Task List
+### Tasks
 
-Each task is ≤30 minutes. `[RED]` writes failing tests; `[GREEN]` makes them pass.
-
-### Phase 1 — Setup
-
-- [x] **1. Add Vitest** — `package.json`, `vitest.config.ts`
-      Add `vitest` as devDep, add `"test": "vitest"` script, minimal config (node env, no jsdom).
-      Done when: `npm test` runs and reports "No test files found".
-      Est: 10 min
-
-### Phase 2 — Pure helpers (test-first)
-
-- [x] **2. [RED] Tests for schedule helpers** — `src/__tests__/schedule-helpers.test.ts`
-      Cases: filter by tab (all/active/paused); search by label (case-insensitive, partial, empty query returns all); stats (active count, paused count, soonest next-fire across enabled schedules with mixed nulls); countdown formatter (just-now / minutes / hours / days / "tomorrow" / past / null).
-      Done when: tests exist, all FAIL.
-      Est: 25 min
-
-- [x] **3. [GREEN] Implement schedule helpers** — `src/schedule-helpers.ts`
-      Pure functions: `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`. No DOM, no logseq, no side effects.
-      Done when: all tests from task 2 pass; `tsc --noEmit` clean.
-      Est: 25 min
-
-### Phase 3 — UI plumbing
-
-- [x] **4. Replace CSS in index.html** — `index.html`
-      Port Variant D styles: panel grid, header with stats, sidebar (search, tabs, sched-item, +new button), detail pane (next-fire card, config card, field-grid, chips), recent-runs list, dark-mode variants, 680px responsive breakpoint.
-      Done when: opening the dev build shows the new layout (with placeholder content); dark mode looks right.
-      Est: 30 min
-
-- [x] **5. UI state, re-render skeleton, sidebar list with selection** — `src/ui.ts`
-      _Merged with task 6 — see Progress Log._ Module-level vars (`selectedId`, `searchQuery`, `activeTab`, `paneMode`, `cachedSchedules`, `callbacks`). Helper render functions (`renderHeader`, `renderSidebar`, `renderSchedItem`, `renderDetail`). Sidebar list with status pills and click-to-select. `captureFocus`/`restoreFocus` helpers for the search input. Detail pane has a placeholder for view mode.
-      Done when: clicking a schedule highlights it; basic shell renders. Done.
-      Est: 20 min
-
-### Phase 4 — Sidebar
-
-- [x] **6. Sidebar list with status pills and summaries** — `src/ui.ts`
-      _Done as part of task 5 — see Progress Log._ Note: relative next-fire summary in `row2` is still TODO; today it shows the natural-language string. Will be filled in by task 15 (header stats) which adds the formatter wiring.
-      Est: 20 min
-
-- [x] **7. Search input** — `src/ui.ts`
-      Search box at top of sidebar. `onInput` updates `searchQuery` and re-renders. After re-render, `restoreFocus()` keeps focus and cursor position. Sidebar list filters via `searchSchedules`.
-      Done when: typing filters the list without losing focus or cursor position.
+- [x] **1. Update types and add graph-matching helper** — `src/types.ts`, `src/schedule-helpers.ts`, `src/__tests__/schedule-helpers.test.ts`
+      Add `graphNames?: string` to `ScheduleEntry`. Add `"skipped-wrong-graph"` to `FireOutcome`.
+      Write `isScheduleForGraph(entry, graphName): boolean` in `schedule-helpers.ts`.
+      Add Vitest tests: `"all"` → true, missing/empty field → true, single match → true,
+      single mismatch → false, multi-graph match → true, whitespace trimming, case-insensitive.
+      Test: `npm run typecheck && npm test` pass, new tests cover all cases.
       Est: 15 min
 
-- [x] **8. Filter tabs** — `src/ui.ts`
-      Three buttons: All (n) / Active (n) / Paused (n). Counts come from the unfiltered list. Click sets `activeTab` and re-renders. Sidebar list filters via `filterSchedules`.
-      Done when: tabs filter correctly; counts always reflect totals, not filtered totals.
-      Est: 15 min
-
-- [x] **9. "+ New schedule" button** — `src/ui.ts`
-      Button at the bottom of the sidebar. Click sets `paneMode="create"` and `selectedId=null`, re-renders.
-      Done when: clicking + New shows the (still empty) create form in the detail pane.
-      Est: 10 min
-
-### Phase 5 — Detail pane
-
-- [x] **10. Detail pane view mode** — `src/ui.ts`
-      Title row (label + subtitle + actions: ▶ Run Now / ⟳ Force Run / Pause/Resume / Edit / Delete), next-fire card (hidden when paused or no next-fire), configuration card (label, page name, tags as chips, schedule text, cron in `<code>`, status). Wire Run Now / Force Run / Pause-Resume / Delete to existing callbacks. Edit sets `paneMode="edit"` (placeholder until task 14).
-      Done when: selecting any schedule shows full details; all five buttons work.
-      Est: 30 min
-
-- [x] **11. Zero-state placeholder** — `src/ui.ts`
-      _Done as part of task 5 — see Progress Log._ Sidebar shows "No schedules yet"; detail pane shows centered placeholder with ⏰ icon and a hint to click + New schedule.
-      Est: 10 min
-
-- [x] **12. Recent runs card** — `src/ui.ts`
-      Below the configuration card. Pulls from `loadFireLog()` filtered by `selectedId`, last 10 entries. Each row: relative time via new `formatPast` helper, source pill, outcome badge with color. Error message becomes a tooltip on the row. Added 8 unit tests for `formatPast`.
-      Done when: a freshly-fired schedule shows the run in the card; old runs render with right colors.
-      Est: 25 min
-
-- [x] **13. Detail pane create mode** — `src/ui.ts`
-      When `paneMode === "create"`: shared `renderScheduleForm(null)` shows empty fields. Save creates a new entry with a fresh id and `createdAt`, switches to view, selects the new schedule.
-      Done when: creating a schedule via the form works end-to-end and the new schedule is selected after save.
-      Est: 25 min
-
-- [x] **14. Detail pane edit mode** — `src/ui.ts`
-      Edit button on view mode sets `paneMode="edit"` and `renderScheduleForm(selected)` pre-fills inputs. Save replaces the existing entry in storage (same id, same createdAt), switches back to view. `cb.onChange()` triggers an engine restart that picks up the new cron.
-      Done when: editing label/pageName/tags/when persists correctly and the engine picks up the new cron.
-      Est: 25 min
-
-### Phase 6 — Header and responsive
-
-- [x] **15. Header stats** — `src/ui.ts`
-      `Scheduler` title, then stats row: active count with green dot, paused count, "Next {countdown}" via `computeStats` + `formatCountdown`. Re-renders along with the rest.
-      Done when: stats reflect current state and update on add/delete/toggle.
-      Est: 15 min
-
-- [x] **16. Narrow-width back button** — `src/ui.ts`, `index.html`
-      Back button rendered in detail pane (already part of task 5/10/13/14). CSS hides it at wide widths and shows it at narrow widths. Click clears `selectedId` AND `paneMode = "view"` (so create/edit also drop back to the list cleanly). Refactored auto-select-first into a separate `seedInitialSelection` that only runs on panel open, so the back button doesn't fight with auto-re-selection. Delete handler now explicitly picks the next schedule.
-      Done when: at <=680px, sidebar is primary, selecting a schedule shows detail with back button that returns to sidebar.
+- [x] **2. Wire graph awareness into the engine** — `src/scheduler.ts`, `src/index.ts`
+      Add `currentGraphName` param to `SchedulerEngine.start()`.
+      In `pollAndFire`, before firing each schedule, call `isScheduleForGraph`; if false,
+      log a `"skipped-wrong-graph"` fire log entry and `continue`.
+      In `index.ts`, call `logseq.App.getCurrentGraph()` at startup and pass `graph.name`
+      to `engine.start()` via `restart()`.
+      Test: `npm run typecheck && npm run build` pass, console shows skip messages for non-matching schedules.
       Est: 20 min
 
-### Phase 7 — Validation
-
-- [x] **17. Typecheck + tests + build** — terminal
-      Run `npm run typecheck`, `npm test`, `npm run build`. Fix anything that errors.
-      Done when: all three pass clean.
-      Est: 10 min
-
-- [x] **18. Manual test in Logseq** — `logseq-plugin-tester` skill
-      Ran via a subagent driving playwright-cli against a real Logseq at localhost:3001. First pass surfaced three bugs (stale rerender after writes, dark mode not following Logseq theme, Run Now source mislabeled). All three fixed and re-tested — second pass confirms everything works including live dark/light toggle without panel reopen.
-      Done when: full happy path works without console errors.
-      Est: 20 min
-
-- [x] **19. Code review pass** — `code-review` skill
-      Run code-review against the diff. Address flagged issues.
-      Done when: review checklist clear.
+- [x] **3. Handle graph switches at runtime** — `src/index.ts`, `src/storage.ts`
+      Export `resetCaches()` from `storage.ts` that sets `schedulesCache`, `lastRunsCache`,
+      `fireLogCache` back to `null` (next read re-fetches from `logseq.settings`).
+      In `index.ts`, subscribe to `logseq.App.onCurrentGraphChanged`: call `resetCaches()`,
+      then `restart()` with the new graph name.
+      Store `currentGraphName` at module level in `index.ts` so the UI can read it (for form default).
+      Test: `npm run typecheck && npm run build` pass, switching graphs in Logseq triggers engine restart with new graph name in logs.
       Est: 15 min
 
-**Total estimate:** ~6 hours focused work.
+- [x] **4. Add Graphs field to form, graph row to config card, graph badge to sidebar** — `src/ui.ts`, `index.html`
+      In `renderScheduleForm`: add a "Graphs" text input between Tags and When.
+      Default for new schedules: current graph name (read from `index.ts` export).
+      For edits: existing `graphNames` value (or `"all"` if missing).
+      On save: read the field and store as `graphNames` on the `ScheduleEntry`.
+      In `renderConfigCard`: add `<dt>Graphs</dt><dd>...</dd>` row.
+      In `renderSchedItem`: add a small subtitle with the graph name(s), style `"all"` distinctly.
+      In `index.html`: CSS for graph badge/subtitle in sidebar items (light + dark).
+      Test: panel shows the field, creating a schedule stamps the graph name, editing preserves it, sidebar shows labels.
+      Est: 25 min
 
----
+- [x] **5. Update docs and task tracker** — `tasks.md`, `CHANGELOG.md`, `README.md`, `REQUIREMENTS.md`
+      Document the graph-scoping feature. Update storage schema notes.
+      Add backup/restore (export/import) to the deferred section of `tasks.md`.
+      Test: docs accurately describe the new behavior.
+      Est: 10 min
 
-## Progress Log
-
-<!-- Updated as tasks complete -->
-- 2026-04-11 — Task 1 done: Vitest 2.1.9 installed, `npm test` reports "No test files found" as expected. Exit code 1 will flip to 0 once task 2 adds the first test file.
-- 2026-04-11 — Task 2 done (RED): 25 tests written across `filterSchedules`, `searchSchedules`, `computeStats`, `formatCountdown`. Suite fails to load because `src/schedule-helpers.ts` doesn't exist.
-- 2026-04-11 — Task 3 done (GREEN): `src/schedule-helpers.ts` implemented with 4 pure functions. All 25 tests pass on first run, `tsc --noEmit` clean.
-- 2026-04-11 — Task 4 done: `index.html` `<style>` block fully replaced with Variant D layout (panel grid, header, sidebar, detail pane, next-fire card, config card, recent-runs styles, detail-form styles for create/edit, 680px responsive breakpoint, full dark-mode variants). `npm run typecheck` and `npm run build` both clean. Note: panel will render visually broken until task 5+ rewrites `ui.ts` rendering — old class names (`scheduler-panel`, `scheduler-row`, etc.) no longer have CSS. Intentional intermediate state.
-- 2026-04-11 — Tasks 7 + 8 done: Search input wired with `onInput → searchQuery → rerender → restoreFocus`. Filter tabs wired with click handler that sets `activeTab`. Tab counts always show totals (not filtered totals). Sidebar list now uses `searchSchedules(filterSchedules(cachedSchedules, activeTab), searchQuery)`. New "No schedules match" empty state for when filtering produces no results.
-- 2026-04-11 — Task 9 done: + New schedule button wired. Sets `paneMode="create"`, `selectedId=null`. Detail pane shows a form placeholder until task 13.
-- 2026-04-11 — Task 10 done: Detail pane view mode renders the rich layout — title row with action buttons (Run Now, Force Run, Pause/Resume, Edit, Delete), next-fire card with `formatCountdown`, configuration card with tags as chips. All actions wired: Run Now / Force Run reuse the existing button-feedback pattern (Running… → Done ✓ → reset). Delete clears `selectedId` so `ensureValidSelection` picks the next item. Edit currently routes to a placeholder. Toggle is now a button in the title-actions row instead of a checkbox in the sidebar (the sidebar shows the ON/OFF pill as a passive indicator). New `ensureValidSelection` helper centralises the auto-select-first logic for both initial render and post-delete cleanup.
-- 2026-04-11 — Tasks 11 + 12 + 15 done: Zero-state was already in place from task 5. Added `formatPast` helper to `schedule-helpers.ts` (with 8 unit tests, total now 33). Recent runs card renders below the configuration card, pulls from cached fire log filtered by `selectedId`, shows last 10 entries with relative time / source pill / colored outcome badge. Error messages surface as tooltips. Header stats now show active count with green dot, paused count, and "Next {countdown}" computed from `computeStats(cachedSchedules, callbacks.nextRunFor)`. `rerender` now loads schedules and fire log in parallel via `Promise.all`.
-- 2026-04-11 — Tasks 13 + 14 done: One shared `renderScheduleForm(initial)` powers both create and edit. Create mode passes null for empty fields; edit mode passes the selected schedule for pre-fill. The cron preview updates live as the user types in the When field via a direct DOM update (no rerender, so focus is preserved naturally). Submit handler reads inputs, validates, parses NL → cron, and either pushes a new entry or replaces the existing one in-place (preserves id and createdAt for edit). On save: switches to view mode, sets selectedId to the new/edited entry, calls `cb.onChange()` to restart the engine. Cancel just flips paneMode without saving. Errors show in the form-error block at the bottom.
-- 2026-04-11 — Task 16 done: Back button click handler now resets both `selectedId = null` AND `paneMode = "view"` so back from create/edit drops cleanly to the sidebar. Surfaced a bug while wiring this up: `ensureValidSelection` was running on every rerender and immediately re-selecting the first schedule after the user clicked back, defeating the back button. Refactored into two functions: `seedInitialSelection` runs only on panel open (controlled by a `needsInitialSeed` flag set in `renderPanel`), and `cleanupStaleSelection` only clears the selection if the schedule was deleted in another tab. Delete handler now explicitly picks the next schedule (`list[0]?.id ?? null`) instead of relying on auto-selection.
-- 2026-04-11 — Tasks 17 + 19 done: typecheck, 33 tests, and build all clean. Code review (task 19) ran via the `code-review` skill against `ddf1c54..HEAD`. No must-fix issues. Applied seven 🟡 fixes in one batch: removed unused `_cb` parameter from `wireUp`, added try/catch + console.error to toggle and delete handlers, fixed stale `btn` reference in `attachRunHandler` (no more dead-callback cleanup on success path; failure path still restores in place), wrapped detail form in `<form>` so Enter submits, converted sidebar items to `<button class="sched-item">` with `aria-pressed` and CSS button reset for keyboard accessibility, added `aria-label="Search schedules"` to the search input, added `:focus-visible` outline on `.sched-item`. Also extended `escapeHtml` to escape single quotes for latent-XSS safety. File-size split (`src/ui.ts` ~660 lines) deferred to `REFACTOR_BACKLOG.md` as `[R-001]`.
-- 2026-04-11 — Task 18 done (manual test, two passes). First pass via a subagent driving playwright-cli against real Logseq surfaced three bugs: (1) **stale rerender after writes** — every mutation persisted to `logseq.settings` but the rerender read back stale data because `logseq.updateSettings` is fire-and-forget IPC; panel appeared frozen until reopened. Fixed by adding an authoritative in-memory cache in `storage.ts` for schedules/last-runs/fire-log — reads after writes now return fresh data, `logseq.settings` only consulted on the first read after plugin start. (2) **dark mode broken** — plugin iframe used `@media (prefers-color-scheme: dark)` but Logseq's dark mode is a CSS class on the parent, not an OS setting. Fixed by having `index.ts` read `logseq.App.getUserConfigs()` for the initial theme and subscribing to `logseq.App.onThemeModeChanged` to sync a `dark` class onto the iframe's `<html>`. CSS changed to `html.dark` selectors. (3) **Run Now source mislabeled** — `PanelCallbacks.runNow` in `index.ts` called `engine.fire` without the source arg, so fire-log entries showed `cron` for manual triggers. Fixed by passing `"manual"` or `"force"` based on the force flag. Second pass confirmed all three fixed including live dark↔light toggle without panel reopen. No console regressions.
-- 2026-04-11 — **Redesign complete.** 19/19 tasks done. 12 commits on `main` from `ddf1c54` (initial) through the final fix commit. 33 passing unit tests covering pure helpers. All validation clean.
-- 2026-04-11 — Tasks 5 + 6 done (merged): Realised on contact with implementation that pure "state vars only" couldn't ship without sidebar list rendering — the state plumbing is meaningless without something selectable. Combined into one logical change. New `src/ui.ts` has: module-level state (`selectedId`/`searchQuery`/`activeTab`/`paneMode`/`cachedSchedules`/`callbacks`), helper render functions (`renderHeader`/`renderSidebar`/`renderSchedItem`/`renderDetail`), sidebar list with click-to-select, detail-pane placeholder, `captureFocus`/`restoreFocus` for the search input, `has-selection` class on the panel for the responsive layout. Existing add/delete/run-now/force-run/toggle handlers removed — they come back in tasks 12 (recent runs needs nothing extra), 13 (create), 14 (edit), and partially in task 10 (view-mode actions). Bundle dropped 4kB. Typecheck/test/build all clean. Filter tabs / search input / +new button render in the DOM but don't have handlers yet — wired by tasks 7/8/9.
+### Progress Log
+- 2026-04-11 — Task 1 done: `graphNames?: string` on `ScheduleEntry`, `"skipped-wrong-graph"` on `FireOutcome`, `isScheduleForGraph` helper with 11 tests. Total 44 tests pass.
+- 2026-04-11 — Task 2 done: `SchedulerEngine` takes `graphName` in `start()`, `pollAndFire` skips non-matching schedules (only when a fire is due) with fire log + lastRun recording.
+- 2026-04-11 — Task 3 done: `resetCaches()` in `storage.ts`, `onCurrentGraphChanged` handler in `index.ts` flushes caches and restarts engine.
+- 2026-04-11 — Task 4 done: "Graphs" text field in form (defaults to current graph), graph badge on sidebar items and config card, CSS for light + dark mode, `skipped-wrong-graph` badge colour.
+- 2026-04-11 — Task 5 done: CHANGELOG, README, tasks.md updated. Backup/restore added to deferred section.
+- 2026-04-11 — **Graph-scoped schedules complete.** 5/5 tasks done. typecheck + 44 tests + build all clean.

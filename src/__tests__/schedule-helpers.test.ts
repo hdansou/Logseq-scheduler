@@ -5,6 +5,7 @@ import {
   computeStats,
   formatCountdown,
   formatPast,
+  isScheduleForGraph,
 } from "../schedule-helpers";
 import type { ScheduleEntry } from "../types";
 
@@ -234,5 +235,63 @@ describe("formatPast", () => {
     const result = formatPast(longAgo, now);
     expect(result).not.toMatch(/ago$/);
     expect(result).not.toBe("yesterday");
+  });
+});
+
+describe("isScheduleForGraph", () => {
+  it("returns true when graphNames is 'all'", () => {
+    const s = makeSchedule({ graphNames: "all" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("returns true when graphNames is 'All' (case-insensitive)", () => {
+    const s = makeSchedule({ graphNames: "All" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("returns true when graphNames is undefined (legacy)", () => {
+    const s = makeSchedule();
+    delete (s as any).graphNames;
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("returns true when graphNames is empty string", () => {
+    const s = makeSchedule({ graphNames: "" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("returns true when graphNames is whitespace only", () => {
+    const s = makeSchedule({ graphNames: "   " });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("returns true for a single matching graph name", () => {
+    const s = makeSchedule({ graphNames: "My Journal" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("returns false for a single non-matching graph name", () => {
+    const s = makeSchedule({ graphNames: "Work" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(false);
+  });
+
+  it("returns true when current graph is in a comma-separated list", () => {
+    const s = makeSchedule({ graphNames: "Work, My Journal, Side Project" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("returns false when current graph is not in a comma-separated list", () => {
+    const s = makeSchedule({ graphNames: "Work, Side Project" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(false);
+  });
+
+  it("handles whitespace around comma-separated names", () => {
+    const s = makeSchedule({ graphNames: "  Work ,  My Journal  " });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
+  });
+
+  it("matches case-insensitively", () => {
+    const s = makeSchedule({ graphNames: "my journal" });
+    expect(isScheduleForGraph(s, "My Journal")).toBe(true);
   });
 });

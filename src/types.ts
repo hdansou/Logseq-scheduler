@@ -28,6 +28,8 @@ export interface ScheduleEntry {
    * pre-date the schedule itself.
    */
   createdAt: number;
+  /** Comma-separated graph names this schedule targets, or "all". Missing/empty = "all" (legacy). */
+  graphNames?: string;
 }
 
 export interface GlobalSettings {
@@ -42,7 +44,7 @@ export interface LastRunMap {
   [scheduleId: string]: number;
 }
 
-export type FireOutcome = "created" | "exists" | "skipped" | "error";
+export type FireOutcome = "created" | "exists" | "skipped" | "skipped-wrong-graph" | "error";
 
 export interface FireLogEntry {
   /** When the fire was attempted (ms since epoch). */

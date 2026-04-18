@@ -1,14 +1,16 @@
 import "@logseq/libs";
 import { SchedulerEngine } from "./scheduler";
-import { loadSchedules } from "./storage";
+import { loadSchedules, resetCaches } from "./storage";
 import { renderPanel, type PanelCallbacks } from "./ui";
 import type { GlobalSettings } from "./types";
 
 const engine = new SchedulerEngine();
+let currentGraphName = "";
 
 const panelCallbacks: PanelCallbacks = {
   onChange: () => restart(),
   nextRunFor: (id: string) => engine.nextRunFor(id),
+  currentGraphName: () => currentGraphName,
   async runNow(scheduleId: string, force = false) {
     const schedules = await loadSchedules();
     const schedule = schedules.find((s) => s.id === scheduleId);
@@ -43,7 +45,7 @@ function readGlobalSettings(): GlobalSettings {
 async function restart(): Promise<void> {
   const schedules = await loadSchedules();
   const settings = readGlobalSettings();
-  engine.start(schedules, settings);
+  engine.start(schedules, settings, currentGraphName);
 }
 
 function applyThemeMode(mode: "light" | "dark"): void {
@@ -149,6 +151,29 @@ async function main() {
     ) {
       await restart();
     }
+  });
+
+  // Detect current graph name for graph-scoped schedule filtering.
+  try {
+    const graph = await logseq.App.getCurrentGraph();
+    currentGraphName = graph?.name ?? "";
+    console.info(`[scheduler] Current graph: "${currentGraphName}"`);
+  } catch (err) {
+    console.warn("[scheduler] Could not detect current graph:", err);
+  }
+
+  // On graph switch: flush caches (stale data from prior graph) and restart.
+  logseq.App.onCurrentGraphChanged(async () => {
+    try {
+      const graph = await logseq.App.getCurrentGraph();
+      currentGraphName = graph?.name ?? "";
+      console.info(`[scheduler] Graph switched to: "${currentGraphName}"`);
+    } catch (err) {
+      console.warn("[scheduler] Could not detect graph after switch:", err);
+      currentGraphName = "";
+    }
+    resetCaches();
+    await restart();
   });
 
   // Start live schedules immediately. The engine now polls internally and

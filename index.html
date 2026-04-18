@@ -232,6 +232,16 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .sched-item .row3 { margin-top: 3px; }
+      .graph-badge {
+        display: inline-block;
+        font-size: 0.7em;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: #e0e7ff;
+        color: #3730a3;
+      }
+      .graph-badge.all { font-style: italic; background: #f3f4f6; color: #6b7280; }
       .sidebar-empty {
         padding: 16px 14px;
         font-size: 0.82em;
@@ -445,6 +455,7 @@
       .badge.created { background: #d1fae5; color: #065f46; }
       .badge.exists { background: #e5e7eb; color: #4b5563; }
       .badge.skipped { background: #fef3c7; color: #92400e; }
+      .badge.skipped-wrong-graph { background: #e0e7ff; color: #3730a3; }
       .badge.error { background: #fee2e2; color: #b42318; }
       .runs-empty {
         color: var(--muted);
@@ -563,6 +574,8 @@
       html.dark .sched-item.selected { background: #1f2024; }
       html.dark .status.on { background: #064e3b; color: #6ee7b7; }
       html.dark .status.off { background: #2a2c32; color: #9ca3af; }
+      html.dark .graph-badge { background: #1e1b4b; color: #a5b4fc; }
+      html.dark .graph-badge.all { background: #2a2c32; color: #9ca3af; }
       html.dark .new-btn { background: #1f2024; }
       html.dark .btn { background: #2a2c32; }
       html.dark .btn:hover { background: #33363d; }
@@ -581,6 +594,7 @@
       html.dark .badge.created { background: #064e3b; color: #6ee7b7; }
       html.dark .badge.exists { background: #2a2c32; color: #9ca3af; }
       html.dark .badge.skipped { background: #422006; color: #fcd34d; }
+      html.dark .badge.skipped-wrong-graph { background: #1e1b4b; color: #a5b4fc; }
       html.dark .badge.error { background: #3a1f1f; color: #fca5a5; }
       html.dark .run-row .source { background: #2a2c32; color: var(--muted); }
       html.dark .detail-form input { background: #0f1013; }

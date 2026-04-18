@@ -14,6 +14,7 @@ export interface PanelCallbacks {
   onChange: () => Promise<void> | void;
   runNow: (scheduleId: string, force?: boolean) => Promise<void>;
   nextRunFor: (scheduleId: string) => Date | null;
+  currentGraphName: () => string;
 }
 
 type PaneMode = "view" | "edit" | "create";
@@ -186,6 +187,13 @@ function renderSidebar(): string {
   `;
 }
 
+function graphBadge(s: ScheduleEntry): string {
+  const raw = s.graphNames?.trim();
+  const label = (!raw || raw.toLowerCase() === "all") ? "all graphs" : raw;
+  const cls = (!raw || raw.toLowerCase() === "all") ? "graph-badge all" : "graph-badge";
+  return `<span class="${cls}">${escapeHtml(label)}</span>`;
+}
+
 function renderSchedItem(s: ScheduleEntry): string {
   const isSelected = s.id === selectedId;
   return `
@@ -195,6 +203,7 @@ function renderSchedItem(s: ScheduleEntry): string {
         <div class="status ${s.enabled ? "on" : "off"}" aria-label="${s.enabled ? "Active" : "Paused"}">${s.enabled ? "ON" : "OFF"}</div>
       </div>
       <div class="row2">${escapeHtml(s.naturalLanguage)}</div>
+      <div class="row3">${graphBadge(s)}</div>
     </button>
   `;
 }
@@ -294,6 +303,7 @@ function renderScheduleForm(initial: ScheduleEntry | null): string {
   const nl = initial?.naturalLanguage ?? "";
   const cronText = initial?.cron ? `cron: ${initial.cron}` : "cron: —";
   const title = initial ? `Edit schedule` : "New schedule";
+  const graphNames = initial?.graphNames ?? callbacks?.currentGraphName() ?? "";
 
   return `
     <main class="detail">
@@ -308,6 +318,9 @@ function renderScheduleForm(initial: ScheduleEntry | null): string {
         </label>
         <label>Tags (comma-separated)
           <input id="form-tags" type="text" value="${escapeHtml(tags)}" placeholder="weekly-review, personal" />
+        </label>
+        <label>Graphs
+          <input id="form-graphs" type="text" value="${escapeHtml(graphNames)}" placeholder="My Journal, Work — or &quot;all&quot;" />
         </label>
         <label>When
           <input id="form-nl" type="text" value="${escapeHtml(nl)}" placeholder="every Saturday at 11 AM" />
@@ -354,6 +367,7 @@ function renderConfigCard(s: ScheduleEntry): string {
         <dt>Label</dt><dd>${escapeHtml(s.label)}</dd>
         <dt>Page name</dt><dd>${escapeHtml(s.pageName)}</dd>
         <dt>Tags</dt><dd class="chips">${tagsHtml}</dd>
+        <dt>Graphs</dt><dd>${graphBadge(s)}</dd>
         <dt>Schedule</dt><dd>${escapeHtml(s.naturalLanguage)}</dd>
         <dt>Cron</dt><dd><code>${escapeHtml(s.cron)}</code></dd>
         <dt>Status</dt><dd>${s.enabled ? "✓ Active" : "○ Paused"}</dd>
@@ -525,6 +539,9 @@ function wireUpScheduleForm(
       const tagsRaw = (
         root.querySelector<HTMLInputElement>("#form-tags")?.value ?? ""
       ).trim();
+      const graphNames = (
+        root.querySelector<HTMLInputElement>("#form-graphs")?.value ?? ""
+      ).trim() || "all";
       const nl = (
         root.querySelector<HTMLInputElement>("#form-nl")?.value ?? ""
       ).trim();
@@ -563,6 +580,7 @@ function wireUpScheduleForm(
             cron,
             enabled: true,
             createdAt: Date.now(),
+            graphNames,
           };
           list.push(entry);
           nextSelectedId = entry.id;
@@ -579,6 +597,7 @@ function wireUpScheduleForm(
             tags,
             naturalLanguage: nl,
             cron,
+            graphNames,
           };
         }
 

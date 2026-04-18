@@ -74,6 +74,16 @@ export function formatCountdown(target: Date | null, now: Date): string {
   return months === 1 ? "in 1 month" : `in ${months} months`;
 }
 
+export function isScheduleForGraph(
+  schedule: ScheduleEntry,
+  currentGraphName: string,
+): boolean {
+  const raw = schedule.graphNames;
+  if (!raw || raw.trim() === "" || raw.trim().toLowerCase() === "all") return true;
+  const names = raw.split(",").map((n) => n.trim().toLowerCase());
+  return names.includes(currentGraphName.toLowerCase());
+}
+
 export function formatPast(target: Date, now: Date): string {
   const diff = now.getTime() - target.getTime();
   if (diff < 0) return target.toLocaleString();

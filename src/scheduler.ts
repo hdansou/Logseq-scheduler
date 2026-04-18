@@ -6,6 +6,7 @@ import {
   loadSchedules,
   recordLastRun,
 } from "./storage";
+import { isScheduleForGraph } from "./schedule-helpers";
 import type {
   FireLogEntry,
   FireOutcome,
@@ -36,6 +37,7 @@ const POLL_INTERVAL_MS = 30_000;
 export class SchedulerEngine {
   private currentSchedules: ScheduleEntry[] = [];
   private currentSettings: GlobalSettings | null = null;
+  private currentGraphName = "";
   private pollTimer: number | null = null;
   private dbOffHook: (() => void) | null = null;
   private heartbeatTimer: number | null = null;
@@ -56,13 +58,14 @@ export class SchedulerEngine {
     }
   }
 
-  start(schedules: ScheduleEntry[], settings: GlobalSettings): void {
+  start(schedules: ScheduleEntry[], settings: GlobalSettings, graphName: string): void {
     this.stop();
     this.currentSchedules = schedules;
     this.currentSettings = settings;
+    this.currentGraphName = graphName;
 
     console.info(
-      `[scheduler] Starting engine with ${schedules.length} schedule(s); timezone=${settings.timezone}; pollInterval=${POLL_INTERVAL_MS}ms`,
+      `[scheduler] Starting engine with ${schedules.length} schedule(s); graph="${graphName}"; timezone=${settings.timezone}; pollInterval=${POLL_INTERVAL_MS}ms`,
     );
 
     for (const schedule of schedules) {
@@ -183,6 +186,21 @@ export class SchedulerEngine {
       );
       if (!mostRecent) continue;
       if (mostRecent.getTime() <= floor) continue;
+
+      if (!isScheduleForGraph(schedule, this.currentGraphName)) {
+        console.info(
+          `[scheduler] (${source}) skipping "${schedule.label}" — not for graph "${this.currentGraphName}"`,
+        );
+        await appendFireLog({
+          at: mostRecent.getTime(),
+          scheduleId: schedule.id,
+          scheduleLabel: schedule.label,
+          source: "cron",
+          outcome: "skipped-wrong-graph",
+        });
+        await recordLastRun(schedule.id, mostRecent.getTime());
+        continue;
+      }
 
       console.info(
         `[scheduler] (${source}) firing missed run for "${schedule.label}" @ ${mostRecent.toISOString()}`,

@@ -1,8 +1,25 @@
 # Logseq Scheduler — Task Tracker
 
-**Last Updated:** 2026-04-11 (two-pane UI redesign shipped)
+**Last Updated:** 2026-04-13 (graph-scoped schedules shipped)
 
 ## Current Sprint
+
+### Feature: Graph-Scoped Schedules (completed 2026-04-11)
+Motivation: schedules were stored globally per-plugin, not per-graph. Switching
+between DB graphs caused the engine to create pages in the wrong graph.
+
+- [x] `graphNames?: string` field on `ScheduleEntry` (comma-separated names, or `"all"`)
+- [x] `"skipped-wrong-graph"` fire outcome when a schedule doesn't target the active graph
+- [x] `isScheduleForGraph` pure helper with 11 Vitest cases (all, legacy, single, multi, case, whitespace)
+- [x] Engine tracks `currentGraphName`, skips non-matching schedules (only when a fire is actually due), logs skip + records lastRun
+- [x] `logseq.App.onCurrentGraphChanged` handler: flushes storage caches, restarts engine with new graph name
+- [x] `resetCaches()` export in `storage.ts`
+- [x] "Graphs" text field in the create/edit form, defaulting to current graph name
+- [x] Graph badge on sidebar items and config card (indigo for named graphs, grey italic for "all")
+- [x] CSS for graph badge in light + dark mode
+- [x] `skipped-wrong-graph` badge colour in fire log (indigo, matching graph badge)
+- [x] Legacy schedules (missing `graphNames`) treated as "all" — no migration needed
+- [x] Docs: CHANGELOG, README (features, usage, how-firings-work), tasks.md
 
 ### Feature: End-to-End Verification (open)
 The plugin compiles and runs, but several behaviors still need a green test
@@ -42,7 +59,7 @@ exists, skipped, error outcomes per fire).
 ### Deferred / Out of MVP
 - [ ] Per-schedule timezone overrides
 - [ ] Slash command to fire a schedule manually (Run Now button covers this need for now)
-- [ ] Schedule import / export
+- [ ] Schedule backup / restore: Export and Import buttons in the UI to download/upload schedules as JSON. Covers cross-machine transfer and disaster recovery. Auto-backup to graph directory deferred further due to filesystem access limitations on DB graphs (web/nightly builds throw "failed to get fs backend").
 - [ ] Notifications when a schedule fires
 - [ ] Document supported natural language phrases in REQUIREMENTS.md
 

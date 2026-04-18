@@ -37,18 +37,18 @@ flowchart TB
     direction TB
 
     subgraph LIFECYCLE ["Entry &amp; lifecycle"]
-      INDEX["src/index.ts<br/>main() &mdash; useSettingsSchema,<br/>register toolbar &#9200; + palette,<br/>create SchedulerEngine,<br/>theme sync,<br/>PanelCallbacks { runNow, nextRunFor, onChange }"]:::entry
+      INDEX["src/index.ts<br/>main() &mdash; useSettingsSchema,<br/>register toolbar &#9200; + palette,<br/>create SchedulerEngine,<br/>theme sync, graph tracking,<br/>onCurrentGraphChanged &rarr; resetCaches + restart,<br/>PanelCallbacks { runNow, nextRunFor,<br/>onChange, currentGraphName }"]:::entry
     end
 
     subgraph UILAYER ["UI layer"]
       UI["src/ui.ts<br/>renderPanel &middot; rerender &middot; panelShell<br/>module state: selectedId, searchQuery,<br/>activeTab, paneMode, cachedSchedules,<br/>cachedFireLog, needsInitialSeed<br/>renderHeader/Sidebar/Detail/Form/RunsCard<br/>wireUp &middot; captureFocus/restoreFocus &middot; Esc handler"]:::ui
-      HELPERS["src/schedule-helpers.ts<br/>pure: filterSchedules, searchSchedules,<br/>computeStats, formatCountdown, formatPast"]:::ui
+      HELPERS["src/schedule-helpers.ts<br/>pure: filterSchedules, searchSchedules,<br/>computeStats, formatCountdown, formatPast,<br/>isScheduleForGraph"]:::ui
       HTML["index.html &lt;style&gt;<br/>two-pane CSS, html.dark variants,<br/>@media (max-width: 680px)"]:::ui
-      TESTS["src/__tests__/schedule-helpers.test.ts<br/>33 Vitest cases (pure helpers only)"]:::pure
+      TESTS["src/__tests__/schedule-helpers.test.ts<br/>44 Vitest cases (pure helpers only)"]:::pure
     end
 
     subgraph ENGINE ["Scheduler engine"]
-      SCHED["src/scheduler.ts &mdash; SchedulerEngine<br/>poll every 30s + DB.onChanged wake-up<br/>heartbeat log every 60s<br/>nextRunFor(id) &middot; fire(schedule, settings, at, opts, source)<br/>catch-up floor = max(lastRun, createdAt)"]:::engine
+      SCHED["src/scheduler.ts &mdash; SchedulerEngine<br/>poll every 30s + DB.onChanged wake-up<br/>heartbeat log every 60s<br/>currentGraphName &middot; isScheduleForGraph check<br/>nextRunFor(id) &middot; fire(schedule, settings, at, opts, source)<br/>catch-up floor = max(lastRun, createdAt)"]:::engine
     end
 
     subgraph PAGE ["Per-fire page creation"]
@@ -63,17 +63,21 @@ flowchart TB
     end
 
     subgraph STORAGE ["Persistence layer"]
-      STORE["src/storage.ts<br/>in-memory authoritative caches:<br/>schedulesCache / lastRunsCache / fireLogCache<br/>load* &rarr; cache first, fall through to logseq.settings<br/>save* &rarr; update cache + logseq.updateSettings"]:::storage
+      STORE["src/storage.ts<br/>in-memory authoritative caches:<br/>schedulesCache / lastRunsCache / fireLogCache<br/>load* &rarr; cache first, fall through to logseq.settings<br/>save* &rarr; update cache + logseq.updateSettings<br/>resetCaches() &rarr; flush on graph switch"]:::storage
     end
   end
 
   %% ---------- Entry wiring ----------
   INDEX -->|register toolbar &amp; palette| LOGSEQ
-  INDEX -->|create &amp; start| SCHED
+  INDEX -->|create &amp; start(schedules, settings, graphName)| SCHED
   INDEX -->|renderPanel( cb )| UI
   INDEX -->|subscribe onThemeModeChanged| LOGSEQ
+  INDEX -->|subscribe onCurrentGraphChanged| LOGSEQ
+  INDEX -->|getCurrentGraph at startup| LOGSEQ
   LOGSEQ -->|theme mode callback| INDEX
+  LOGSEQ -->|graph changed callback| INDEX
   INDEX -->|toggle .dark class on iframe &lt;html&gt;| HTML
+  INDEX -->|on graph switch: resetCaches| STORE
 
   %% ---------- User-driven UI flow ----------
   UI -->|filter / search / stats / formatters| HELPERS
@@ -87,6 +91,7 @@ flowchart TB
   LOGSEQ -->|DB.onChanged wake-up| SCHED
   SCHED -->|loadSchedules &middot; loadLastRuns<br/>recordLastRun &middot; appendFireLog| STORE
   SCHED -->|parse + next/prev fire times| CRONER
+  SCHED -->|isScheduleForGraph(schedule, graphName)| HELPERS
   SCHED -->|on due window: fire(...)| PC
 
   %% ---------- Page creation flow ----------
@@ -117,6 +122,7 @@ flowchart TB
 - **Page creation is called only from the engine.** `page-creator.ts` and `db.ts` are not wired into the UI at all; the UI's "Run Now" action round-trips through `PanelCallbacks.runNow` exposed by `src/index.ts`, which then invokes `engine.fire(...)` with source `"manual"` or `"force"`. That's the single entry point into a page-creation attempt, which keeps the fire log consistent.
 - **Pure utilities** (`schedule-helpers`, `nl-cron`, `suffix`, `types`) have no `logseq` or DOM dependencies. They're trivially unit-testable, which is why the Vitest suite only covers `schedule-helpers` — tests for `nl-cron`, `suffix`, and `db` are a known gap tracked in `tasks.md`.
 - **The iframe boundary matters for theming.** Logseq's dark mode is a CSS class on the parent `<html>`, which the iframe can't see via `prefers-color-scheme`. `src/index.ts` reads the initial theme via `logseq.App.getUserConfigs()`, subscribes to `onThemeModeChanged`, and toggles a `dark` class on the iframe's own `<html>` so the `html.dark` selectors in `index.html` take effect.
+- **Graph scoping is enforced at the engine layer, not the storage layer.** All schedules live in one `_schedulesJson` pool regardless of which graph they target. `SchedulerEngine.pollAndFire` calls `isScheduleForGraph(schedule, currentGraphName)` after computing whether a fire is due — this avoids noisy skip logs on every poll cycle. On graph switch, `index.ts` listens to `logseq.App.onCurrentGraphChanged`, flushes the in-memory caches via `resetCaches()` (because `logseq.settings` may now return data from the new graph's context), and restarts the engine with the new graph name. The UI shows all schedules cross-graph with a graph badge on each item.
 
 ---
 
@@ -147,6 +153,13 @@ sequenceDiagram
     Croner-->>Engine: job (parse only)
     Engine->>Engine: floor = max(lastRun, createdAt)<br/>mostRecent = job.previousRun(now)
     alt mostRecent > floor and mostRecent ≤ now
+      Engine->>Engine: isScheduleForGraph(schedule, currentGraphName)
+      alt graph does not match
+        Engine->>Engine: log "skipping — not for this graph"
+        Engine->>Store: appendFireLog({ outcome: "skipped-wrong-graph" })
+        Engine->>Store: recordLastRun(id, mostRecent)
+        note right of Engine: skip firing, move to next schedule
+      else graph matches
       Engine->>Engine: log "(poll) firing missed run"
       Engine->>PC: fire(schedule, settings, mostRecent,<br/>{ force: false }, "catch-up"/"cron")
 
@@ -189,6 +202,7 @@ sequenceDiagram
       Engine->>Store: appendFireLog({ at, scheduleId,<br/>scheduleLabel, source, outcome, pageName })
       Store->>Store: unshift + trim to 50<br/>update fireLogCache
       Store->>LE: logseq.updateSettings(_fireLogJson)
+      end
     else nothing due
       Engine->>Engine: skip (outcome = "skipped" not recorded)
     end
@@ -204,8 +218,9 @@ sequenceDiagram
 - **`croner` is parse-only.** Step 3/4 creates a `Cron` instance purely to call `previousRun` and `nextRun`. The engine never calls `job.schedule()` or attaches callbacks because hidden-iframe timer throttling would drop them.
 - **The `max(lastRun, createdAt)` floor is why new schedules don't retroactively backfill.** If a user adds "every Friday at 17:03" on a Saturday, `createdAt` is Saturday and the previous Friday's fire time is below the floor, so it's skipped.
 - **`force` is the only path that deletes.** `Run Now` uses `force: false` and skips when the page exists; `Force Run` uses `force: true` and explicitly recreates. Both paths go through the same `fire` method with different source labels (`"manual"` vs `"force"`).
-- **Every outcome ends in one fire-log entry.** `created`, `exists`, `skipped`, and `error` are the four `FireOutcome` values and each one writes through `appendFireLog` → `fireLogCache` → `logseq.updateSettings`. The UI's Recent runs card reads from the same cache.
-- **The `recordLastRun` write happens even for `exists` and `skipped` outcomes** (not shown in the alt branches above for space) so the engine doesn't keep retrying the same window on every poll.
+- **Graph check happens after the due-window test.** `isScheduleForGraph` is called only when a fire would otherwise proceed. This avoids flooding the fire log with `skipped-wrong-graph` entries on every 30-second poll — the skip is recorded once with `recordLastRun` so subsequent polls don't re-log it.
+- **Every outcome ends in one fire-log entry.** `created`, `exists`, `skipped`, `skipped-wrong-graph`, and `error` are the five `FireOutcome` values and each one writes through `appendFireLog` → `fireLogCache` → `logseq.updateSettings`. The UI's Recent runs card reads from the same cache.
+- **The `recordLastRun` write happens even for `exists`, `skipped`, and `skipped-wrong-graph` outcomes** (not shown in the alt branches above for space) so the engine doesn't keep retrying the same window on every poll.
 
 ---
 
@@ -268,7 +283,7 @@ stateDiagram-v2
 - **`view` has three render-time sub-states** (`selected` / `empty` / `unselected`) but only one `paneMode` value. The distinction lives inside `renderDetail()`: if `cachedSchedules.length === 0` it shows the zero-state placeholder; if `selectedId` is null (e.g. after clicking the back button at narrow widths) it shows the "Select a schedule" prompt; otherwise it shows the full view mode. The diagram surfaces these sub-states because they matter for UX reasoning, even though they're not stored separately.
 - **Esc is two-step in create/edit.** The `keydown` handler in `attachEscListener` explicitly checks `paneMode === "create" || paneMode === "edit"` and routes those to `view` first; only a second Esc (now in view mode) closes the panel.
 - **The back button (`← Schedules`) is visible only at narrow widths** (`.back-btn { display: none }` outside the `@media (max-width: 680px)` block). On wide screens the only way out of create/edit is Cancel, Save, or Esc.
-- **Edit preserves `id` and `createdAt`.** The save branch in `wireUpScheduleForm` with `mode === "edit"` uses `{ ...list[idx], label, pageName, tags, naturalLanguage, cron }` instead of building a fresh entry, so the engine's catch-up floor (`max(lastRun, createdAt)`) stays stable across edits.
+- **Edit preserves `id` and `createdAt`.** The save branch in `wireUpScheduleForm` with `mode === "edit"` uses `{ ...list[idx], label, pageName, tags, naturalLanguage, cron, graphNames }` instead of building a fresh entry, so the engine's catch-up floor (`max(lastRun, createdAt)`) stays stable across edits. The `graphNames` field can be changed during an edit to reassign a schedule to a different graph.
 
 ---
 
@@ -324,7 +339,7 @@ sequenceDiagram
 
   UI->>Store: loadSchedules()
   Store-->>UI: current list (from cache)
-  UI->>UI: build new ScheduleEntry<br/>{ id: sch_[ts]_[rand],<br/>createdAt: now, enabled: true, ... }
+  UI->>UI: build new ScheduleEntry<br/>{ id: sch_[ts]_[rand],<br/>createdAt: now, enabled: true,<br/>graphNames: form value or currentGraphName, ... }
   UI->>Store: saveSchedules([...list, newEntry])
   Store->>Store: schedulesCache = [...next]
   Store->>LE: logseq.updateSettings(_schedulesJson)
@@ -332,7 +347,7 @@ sequenceDiagram
   UI->>UI: selectedId = newEntry.id<br/>paneMode = "view"
   UI->>Idx: callbacks.onChange()
   Idx->>Idx: restart() → readGlobalSettings
-  Idx->>Engine: engine.start(schedules, settings)
+  Idx->>Engine: engine.start(schedules, settings, graphName)
   Engine->>Store: loadSchedules()
   Store-->>Engine: fresh list (from cache)
   Engine->>Engine: re-seed poll + DB.onChanged hook
