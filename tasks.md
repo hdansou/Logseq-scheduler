@@ -1,8 +1,29 @@
 # Logseq Scheduler — Task Tracker
 
-**Last Updated:** 2026-04-13 (graph-scoped schedules shipped)
+**Last Updated:** 2026-04-18 (SDK upgrade complete)
 
 ## Current Sprint
+
+### Chore: Upgrade @logseq/libs 0.0.17 → 0.3.2 (completed 2026-04-18)
+Motivation: the new SDK version types all DB-graph APIs (`getTag`, `getTagsByName`,
+`createTag`, `addBlockTag`, `getAllTags`, `checkCurrentIsDbGraph`, `DB.onChanged`)
+that we currently call via `as any` casts and runtime feature detection. The upgrade
+is purely additive — no breaking signature changes for our usage. Removing the casts
+improves type safety and catches regressions at compile time.
+
+Approach: TDD — write type-level regression tests first (verify the typed API surface
+compiles without casts), then remove the casts and guards, then verify existing tests
++ typecheck + build pass.
+
+- [x] Bump `@logseq/libs` from `"^0.0.17"` to `"0.3.2"` in `package.json`, `npm install`
+- [x] Remove `as any` casts and `typeof` guards in `src/page-creator.ts` (tag APIs now typed)
+- [x] Remove `as any` cast on `DB.onChanged` and dynamic `checkCurrentIsDbGraph` cast in `src/scheduler.ts`
+- [x] `npm run typecheck && npm test && npm run build` — all green
+- [x] CHANGELOG entry under `[Unreleased]`
+
+Detailed task breakdown: `tasks/todo.md`
+
+---
 
 ### Feature: Graph-Scoped Schedules (completed 2026-04-11)
 Motivation: schedules were stored globally per-plugin, not per-graph. Switching

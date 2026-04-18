@@ -1,3 +1,4 @@
+import type { PageEntity } from "@logseq/libs/dist/LSPlugin";
 import { findPageByTitle } from "./db";
 import { buildPageName, detectFrequency } from "./suffix";
 import type { ScheduleEntry } from "./types";
@@ -71,9 +72,8 @@ export async function createScheduledPage(
   if (!page) {
     throw new Error(`Failed to create page "${pageName}"`);
   }
-  const pageUuid = (page as any).uuid;
   console.info(
-    `[scheduler] Created page "${pageName}" (uuid=${pageUuid})`,
+    `[scheduler] Created page "${pageName}" (uuid=${page.uuid})`,
   );
 
   // Verify the page is actually queryable before applying tags.
@@ -108,54 +108,46 @@ function normalizeTagName(name: string): string {
  *   2. exact `getTagsByName(name)`
  *   3. fuzzy search through `getAllTags()` using normalized names
  */
-async function resolveTag(tagName: string): Promise<any | null> {
-  const editor = logseq.Editor as any;
-
-  if (typeof editor.getTag === "function") {
-    try {
-      const tag = await editor.getTag(tagName);
-      if (tag?.uuid) return tag;
-    } catch (err) {
-      console.warn(`[scheduler]   getTag error:`, err);
-    }
+async function resolveTag(tagName: string): Promise<PageEntity | null> {
+  try {
+    const tag = await logseq.Editor.getTag(tagName);
+    if (tag?.uuid) return tag;
+  } catch (err) {
+    console.warn(`[scheduler]   getTag error:`, err);
   }
 
-  if (typeof editor.getTagsByName === "function") {
-    try {
-      const tags = await editor.getTagsByName(tagName);
-      if (Array.isArray(tags) && tags[0]?.uuid) return tags[0];
-    } catch (err) {
-      console.warn(`[scheduler]   getTagsByName error:`, err);
-    }
+  try {
+    const tags = await logseq.Editor.getTagsByName(tagName);
+    if (Array.isArray(tags) && tags[0]?.uuid) return tags[0];
+  } catch (err) {
+    console.warn(`[scheduler]   getTagsByName error:`, err);
   }
 
-  if (typeof editor.getAllTags === "function") {
-    try {
-      const all = await editor.getAllTags();
-      if (Array.isArray(all)) {
-        const target = normalizeTagName(tagName);
-        const match = all.find((t: any) => {
-          const candidates = [t?.name, t?.title, t?.originalName].filter(
-            (s) => typeof s === "string",
-          );
-          return candidates.some((c) => normalizeTagName(c) === target);
-        });
-        if (match) {
-          console.info(
-            `[scheduler]   Fuzzy matched "${tagName}" → "${match.title ?? match.name}"`,
-          );
-          return match;
-        }
-        console.info(
-          `[scheduler]   Fuzzy match failed. Available tags: ${all
-            .map((t: any) => t?.title ?? t?.name)
-            .filter(Boolean)
-            .join(", ") || "(none)"}`,
+  try {
+    const all = await logseq.Editor.getAllTags();
+    if (Array.isArray(all)) {
+      const target = normalizeTagName(tagName);
+      const match = all.find((t) => {
+        const candidates = [t?.name, t?.title, t?.originalName].filter(
+          (s): s is string => typeof s === "string",
         );
+        return candidates.some((c) => normalizeTagName(c) === target);
+      });
+      if (match) {
+        console.info(
+          `[scheduler]   Fuzzy matched "${tagName}" → "${match.title ?? match.name}"`,
+        );
+        return match;
       }
-    } catch (err) {
-      console.warn(`[scheduler]   getAllTags error:`, err);
+      console.info(
+        `[scheduler]   Fuzzy match failed. Available tags: ${all
+          .map((t) => t?.title ?? t?.name)
+          .filter(Boolean)
+          .join(", ") || "(none)"}`,
+      );
     }
+  } catch (err) {
+    console.warn(`[scheduler]   getAllTags error:`, err);
   }
 
   return null;
@@ -173,22 +165,8 @@ async function resolveTag(tagName: string): Promise<any | null> {
  * We never fall back to inserting `#tagname` into a block — that attaches
  * the tag to the block, not to the page, which is the wrong semantics.
  */
-async function applyTags(page: any, tagNames: string[]): Promise<void> {
+async function applyTags(page: Pick<PageEntity, "uuid">, tagNames: string[]): Promise<void> {
   if (!tagNames.length) return;
-
-  const editor = logseq.Editor as any;
-  const hasAddBlockTag = typeof editor.addBlockTag === "function";
-  const hasCreateTag = typeof editor.createTag === "function";
-  console.info(
-    `[scheduler] Tag APIs available: getTag=${typeof editor.getTag === "function"}, addBlockTag=${hasAddBlockTag}, getTagsByName=${typeof editor.getTagsByName === "function"}, getAllTags=${typeof editor.getAllTags === "function"}, createTag=${hasCreateTag}`,
-  );
-
-  if (!hasAddBlockTag) {
-    console.warn(
-      `[scheduler] addBlockTag is not available in this Logseq build; cannot assign tags as classes. Skipping tag application.`,
-    );
-    return;
-  }
 
   for (const rawName of tagNames) {
     const tagName = rawName.trim();
@@ -198,10 +176,10 @@ async function applyTags(page: any, tagNames: string[]): Promise<void> {
     try {
       let tag = await resolveTag(tagName);
 
-      if (!tag && hasCreateTag) {
+      if (!tag) {
         console.info(`[scheduler]   Tag not found — creating via createTag("${tagName}")`);
         try {
-          tag = await editor.createTag(tagName);
+          tag = await logseq.Editor.createTag(tagName);
           console.info(`[scheduler]   createTag →`, tag);
         } catch (err) {
           console.error(`[scheduler]   createTag failed:`, err);
@@ -215,7 +193,7 @@ async function applyTags(page: any, tagNames: string[]): Promise<void> {
         continue;
       }
 
-      await editor.addBlockTag(page.uuid, tag.uuid);
+      await logseq.Editor.addBlockTag(page.uuid, tag.uuid);
       console.info(
         `[scheduler]   addBlockTag OK (tagged page with "${tag.title ?? tag.name ?? tagName}")`,
       );

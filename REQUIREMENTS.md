@@ -73,6 +73,7 @@ Switching between DB graphs caused the engine to create pages in the wrong graph
 
 ## Technical Approach
 
+- **Plugin SDK**: `@logseq/libs@0.3.2` — typed DB-graph APIs (`getTag`, `getTagsByName`, `createTag`, `addBlockTag`, `getAllTags`, `checkCurrentIsDbGraph`, `DB.onChanged`). No runtime guards or `as any` casts needed.
 - **Plugin type**: Main UI panel for schedule management + background scheduler running inside the iframe
 - **Cron engine**: `croner` (lightweight, timezone-aware, browser-compatible) used only for *parsing* and next/previous-fire math, not for scheduling callbacks
 - **Scheduler**: polling every 30 s + `logseq.DB.onChanged` (debounced) as a wake-up trigger, because hidden iframes get their timers throttled
@@ -88,7 +89,7 @@ Switching between DB graphs caused the engine to create pages in the wrong graph
 - **UI**: Plain TypeScript + DOM, no framework. Two-pane layout with full-innerHTML re-rendering driven by module-level state vars (`selectedId`, `searchQuery`, `activeTab`, `paneMode`); `captureFocus`/`restoreFocus` preserve search input focus across re-renders. Theme follows Logseq via `logseq.App.onThemeModeChanged`.
 - **Graph scoping**: Each `ScheduleEntry` carries an optional `graphNames` field (comma-separated names or `"all"`). `isScheduleForGraph(entry, graphName)` in `schedule-helpers.ts` handles matching (case-insensitive, whitespace-trimmed, missing/empty = "all"). `logseq.App.getCurrentGraph()` provides the graph name at startup; `logseq.App.onCurrentGraphChanged` triggers cache flush + engine restart on switch. Matching on graph name (not path) for portability across machines.
 - **Testing**: Vitest for pure helpers (`src/schedule-helpers.ts`); no DOM tests — UI is validated manually via the `logseq-plugin-tester` skill
-- **DB graph only**: Tags-as-classes is a DB-graph concept; guard with `checkCurrentIsDbGraph`
+- **DB graph only**: Tags-as-classes is a DB-graph concept; guard with `logseq.App.checkCurrentIsDbGraph()` (typed in SDK 0.3.2)
 
 ## Non-Goals
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Upgraded `@logseq/libs` from 0.0.17 to 0.3.2.** The new SDK types all DB-graph APIs (`getTag`, `getTagsByName`, `createTag`, `addBlockTag`, `getAllTags`, `checkCurrentIsDbGraph`, `DB.onChanged`) that were previously called via `as any` casts and runtime `typeof` guards. All casts and feature-detection code removed — the typed interface is now used directly. No runtime behavior changes; purely a type-safety improvement.
+
 ### Added
 - **Graph-scoped schedules.** Each schedule now carries a `graphNames` field (comma-separated graph names, or `"all"`). New schedules default to the current graph's name. The engine skips schedules that don't target the active graph, logging `skipped-wrong-graph` to the fire log. On graph switch, storage caches are flushed and the engine restarts with the new graph context. Existing schedules without the field are treated as `"all"` (runs on every graph), preserving current behavior.
 - **Graph badges in the UI.** Sidebar schedule items and the detail-pane configuration card show the target graph(s) as a badge. The create/edit form includes a "Graphs" text field defaulting to the current graph name.

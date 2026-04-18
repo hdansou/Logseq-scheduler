@@ -99,7 +99,7 @@ export class SchedulerEngine {
     // DB activity hook — extra wake-up signal if the interval is throttled
     // but the user is actively using Logseq.
     try {
-      const off = (logseq.DB as any).onChanged?.(() => {
+      this.dbOffHook = logseq.DB.onChanged(() => {
         if (this.dbChangeDebounce !== null) {
           window.clearTimeout(this.dbChangeDebounce);
         }
@@ -110,7 +110,6 @@ export class SchedulerEngine {
           );
         }, 5_000);
       });
-      if (typeof off === "function") this.dbOffHook = off;
     } catch (err) {
       console.warn("[scheduler] Could not attach DB.onChanged hook:", err);
     }
@@ -226,20 +225,14 @@ export class SchedulerEngine {
     let pageName: string | undefined;
     let errorMsg: string | undefined;
     try {
-      // Guard: tags-as-classes is a DB-graph feature. Not all @logseq/libs
-      // versions type `checkCurrentIsDbGraph`, so we call it dynamically.
-      const checkFn = (logseq.App as unknown as {
-        checkCurrentIsDbGraph?: () => Promise<boolean>;
-      }).checkCurrentIsDbGraph;
-      if (checkFn) {
-        const isDb = await checkFn.call(logseq.App);
-        if (!isDb) {
-          console.warn(
-            "[scheduler] Current graph is not a DB graph; skipping page creation.",
-          );
-          outcome = "skipped";
-          return;
-        }
+      // Guard: tags-as-classes is a DB-graph feature.
+      const isDb = await logseq.App.checkCurrentIsDbGraph();
+      if (!isDb) {
+        console.warn(
+          "[scheduler] Current graph is not a DB graph; skipping page creation.",
+        );
+        outcome = "skipped";
+        return;
       }
       const result = await createScheduledPage(
         schedule,
