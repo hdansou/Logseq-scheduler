@@ -6,3 +6,7 @@ dist/
 coverage/
 *.tsbuildinfo
 .playwright-cli/
+.env*
+tmp/
+scratch/
+.claude/
