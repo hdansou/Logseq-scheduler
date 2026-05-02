@@ -1,8 +1,19 @@
 # Logseq Scheduler — Task Tracker
 
-**Last Updated:** 2026-04-18 (SDK upgrade complete)
+**Last Updated:** 2026-05-02 (production-hardening pass complete)
 
 ## Current Sprint
+
+### Chore: Production-Hardening Pass (completed 2026-05-02)
+- [x] Vite dev server bound to `127.0.0.1` (was `0.0.0.0`), CORS restricted to `localhost:3001`
+- [x] `.gitignore` expanded: `.env*`, `tmp/`, `scratch/`, `.claude/`
+- [x] npm overrides for transitive vulns: `dompurify >=3.4.2`, `lodash-es >=4.18.1`, `postcss >=8.5.10` (audit: 9 → 5 moderate, remaining are dev-only esbuild/vite)
+- [x] Type narrowing: `onSettingsChanged` callback `any` → `Partial<GlobalSettings>`, `catch (err: any)` → `catch (err: unknown)` with `instanceof` guard
+- [x] Removed superseded mockup variants A/B/C (only variant D retained, per CLAUDE.md)
+- [ ] **Deferred:** Vite 7+ upgrade to clear remaining 5 moderate esbuild/vite audit findings (dev-only)
+- [ ] **Deferred:** `ui.ts` split (R-001) — separate session
+
+---
 
 ### Chore: Upgrade @logseq/libs 0.0.17 → 0.3.2 (completed 2026-04-18)
 Motivation: the new SDK version types all DB-graph APIs (`getTag`, `getTagsByName`,
