@@ -252,9 +252,9 @@ export class SchedulerEngine {
           `[scheduler] Page "${result.pageName}" already exists; skipped.`,
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       outcome = "error";
-      errorMsg = err?.message ?? String(err);
+      errorMsg = err instanceof Error ? err.message : String(err);
       console.error(
         `[scheduler] Error firing schedule "${schedule.label}":`,
         err,

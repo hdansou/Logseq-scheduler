@@ -144,7 +144,7 @@ async function main() {
   // Rebuild engine when the user-visible settings change.
   // (We also stash schedule JSON inside settings, so filter those out
   // to avoid a restart on every add/delete.)
-  logseq.onSettingsChanged(async (next: any, prev: any) => {
+  logseq.onSettingsChanged<Partial<GlobalSettings>>(async (next, prev) => {
     if (
       next?.timezone !== prev?.timezone ||
       next?.startupDelaySeconds !== prev?.startupDelaySeconds
