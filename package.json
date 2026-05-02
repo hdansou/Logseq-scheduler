@@ -1,8 +1,25 @@
 {
   "name": "logseq-scheduler",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Cron-based scheduler for creating tagged pages in Logseq on a recurring basis",
   "main": "dist/index.html",
+  "private": true,
+  "homepage": "https://github.com/hdansou/Logseq-scheduler#readme",
+  "bugs": {
+    "url": "https://github.com/hdansou/Logseq-scheduler/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hdansou/Logseq-scheduler.git"
+  },
+  "keywords": [
+    "logseq",
+    "logseq-plugin",
+    "logseq-db",
+    "scheduler",
+    "cron",
+    "recurring-pages"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -21,8 +38,14 @@
   "logseq": {
     "id": "logseq-scheduler",
     "title": "Scheduler",
-    "icon": "./icon.png",
-    "main": "dist/index.html"
+    "icon": "./icon.svg",
+    "main": "dist/index.html",
+    "supportsDB": true,
+    "supportsDBOnly": true,
+    "minSDKVersion": "0.3.2"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "overrides": {
     "dompurify": ">=3.4.2",
