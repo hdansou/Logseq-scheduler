@@ -10,3 +10,8 @@ coverage/
 tmp/
 scratch/
 .claude/
+CLAUDE.md
+REFACTOR_BACKLOG.md
+tasks.md
+tasks/
+mockups/
