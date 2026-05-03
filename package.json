@@ -1,6 +1,6 @@
 {
   "name": "logseq-scheduler",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Cron-based scheduler for creating tagged pages in Logseq on a recurring basis",
   "main": "dist/index.html",
   "private": true,

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-05-02
+
+### Changed
+- Removed internal dev files from the published repo (agent instructions, task trackers, mockups). No functional changes.
+- Dev server bound to localhost only; CORS restricted to Logseq origin.
+- Hardened `.gitignore` for env files, scratch dirs, and agent artifacts.
+- Narrowed remaining `any` types in settings callback and error handling.
+- Overridden transitive dependency vulnerabilities (`dompurify`, `lodash-es`, `postcss`).
+
 ## [1.0.0] — 2026-05-02
 
 First public release. Cron-based page creation for Logseq DB graphs with named schedules, natural language input, automatic date suffixes, tag-as-class application, and a two-pane manager UI.
@@ -40,5 +49,6 @@ First public release. Cron-based page creation for Logseq DB graphs with named s
 - Existing schedules missing the `createdAt` field fall through to `?? 0` and may backfill on the next poll.
 - `src/ui.ts` is ~693 lines — split deferred to a future release.
 
-[Unreleased]: https://github.com/hdansou/Logseq-scheduler/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/hdansou/Logseq-scheduler/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/hdansou/Logseq-scheduler/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/hdansou/Logseq-scheduler/releases/tag/v1.0.0
