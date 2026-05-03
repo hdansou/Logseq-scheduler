@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-05-02
+
+### Added
+- Screenshots in README: overview, create form, detail view, edit form, created pages in Logseq.
+
+### Fixed
+- Repo URL in README install instructions.
+
 ## [1.0.1] — 2026-05-02
 
 ### Changed
@@ -49,6 +57,7 @@ First public release. Cron-based page creation for Logseq DB graphs with named s
 - Existing schedules missing the `createdAt` field fall through to `?? 0` and may backfill on the next poll.
 - `src/ui.ts` is ~693 lines — split deferred to a future release.
 
-[Unreleased]: https://github.com/hdansou/Logseq-scheduler/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/hdansou/Logseq-scheduler/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/hdansou/Logseq-scheduler/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/hdansou/Logseq-scheduler/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/hdansou/Logseq-scheduler/releases/tag/v1.0.0

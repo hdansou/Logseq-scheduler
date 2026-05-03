@@ -4,6 +4,8 @@ Cron-based page creation for Logseq DB graphs. Define named schedules in plain E
 
 > **DB graphs only.** This plugin uses tag-as-class semantics, which is a DB-graph feature. File graphs are not supported.
 
+![Scheduler plugin running inside Logseq](docs/screenshot-overview.png)
+
 ## Features
 
 ### Scheduling engine
@@ -40,8 +42,8 @@ Cron-based page creation for Logseq DB graphs. Define named schedules in plain E
 ### From source
 
 ```bash
-git clone <repo-url> logseq-scheduler
-cd logseq-scheduler
+git clone https://github.com/hdansou/Logseq-scheduler.git
+cd Logseq-scheduler
 npm install
 npm run build
 ```
@@ -63,6 +65,8 @@ Click the ⏰ icon in the Logseq toolbar, or run **Scheduler: Open panel** from 
 
 ### Creating a schedule
 
+![Creating a new schedule](docs/screenshot-create.png)
+
 1. Click **+ New schedule** at the bottom of the sidebar. The create form appears in the detail pane.
 2. Fill in the fields:
    - **Label** — human-friendly name (e.g., `Personal Weekly Review`).
@@ -73,6 +77,8 @@ Click the ⏰ icon in the Logseq toolbar, or run **Scheduler: Open panel** from 
 3. Press <kbd>Enter</kbd> or click **Save**. The new schedule appears in the sidebar, is selected automatically, and the detail pane switches to its view mode.
 
 ### Working with existing schedules
+
+![Schedule detail view with recent runs](docs/screenshot-detail.png)
 
 Click a schedule in the sidebar to select it. The detail pane shows:
 
@@ -87,6 +93,8 @@ From the action buttons you can:
 - **⟳ Force Run** — delete and recreate the current-period page.
 - **Pause / Resume** — toggle the schedule off or on. Paused schedules stay in the list with an **OFF** pill and don't fire.
 - **Edit** — reopens the form pre-filled with the current values. Save replaces the entry in place (same `id`, same `createdAt`). <kbd>Enter</kbd> submits.
+
+  ![Editing an existing schedule](docs/screenshot-edit.png)
 - **Delete** — removes the schedule. The next schedule in the list is selected, or the empty state is shown if it was the last one.
 
 ### Finding schedules
@@ -120,6 +128,10 @@ Open `Settings → Plugin Settings → Scheduler`:
 - **Schedules** heading — a pointer to the ⏰ toolbar button; the schedule list itself is managed in the panel because native settings schemas can't render dynamic lists.
 
 Schedules, last-run timestamps, and fire-history entries are persisted in `logseq.settings` under internal keys (`_schedulesJson`, `_lastRunJson`, `_fireLogJson`). The fire history is surfaced in the panel's **Recent runs** card so you rarely need to inspect these directly.
+
+### Created pages in Logseq
+
+![Pages created by the scheduler with tags applied](docs/screenshot-pages.png)
 
 ## How firings work
 
